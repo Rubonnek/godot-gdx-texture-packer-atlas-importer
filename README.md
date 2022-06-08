@@ -21,7 +21,7 @@ The main benefits to use this tool are:
 
 1. Packing texture will no longer require you to restart Godot.
 2. [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) itself provides an interface in which you can manage all your texture atlases separately which is great for bigger projects.
-3. And packing your textures will increase performance since by doing so Godot will be able to minimize the number of screen draw calls which will increase your frames per second.
+3. And packing your textures will increase performance since by doing so Godot will be able to minimize the number of screen draw calls which could increase your frames per second depending on your workload.
 
 ## License
 
