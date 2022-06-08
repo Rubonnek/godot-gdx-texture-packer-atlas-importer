@@ -1,6 +1,6 @@
 # The MIT License (MIT)
 #
-# Copyright (c) 2021 Wilson E. Alvarez
+# Copyright (c) 2021-2022 Wilson E. Alvarez
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,19 +28,19 @@ extends EditorImportPlugin
 
 # Unique name for the import plugin to let Godot know which import was used
 func get_importer_name() -> String:
-    return "rubonnek.libgdx_texture_packer_atlas_importer"
+	return "rubonnek.libgdx_texture_packer_atlas_importer"
 
 
 # Returns the name of the type it imports and it will be shown to the user in the Import dock.
 func get_visible_name() -> String:
-    return "LibGDX Atlas"
+	return "LibGDX Atlas"
 
 
 # Godot's import system detects file types by their extension. In the
 # get_recognized_extensions() method you return an array of strings to
 # represent each extension that this plugin can understand.
 func get_recognized_extensions() -> Array:
-    return ["atlas"]
+	return ["atlas"]
 
 
 # The imported files are saved in the .import folder at the project's root.
@@ -49,14 +49,14 @@ func get_recognized_extensions() -> Array:
 # extensions for the same resource), you need to declare what will be used in
 # the import.
 func get_save_extension() -> String:
-    return "res"
+	return "res"
 
 
 # The imported resource has a specific type, so the editor can know which
 # property slot it belongs to. This allows drag and drop from the FileSystem
 # dock to a property in the Inspector.
 func get_resource_type() -> String:
-    return "AtlasTexture"
+	return "AtlasTexture"
 
 
 # Since there might be many presets and they are identified with a number, it's a good practice to use an enum so you can refer to them using names.
@@ -67,17 +67,17 @@ enum m_presets { DEFAULT }
 # preset now, but we can make this method future-proof by returning the size of
 # our m_presets enumeration.
 func get_preset_count() -> int:
-    return m_presets.size()
+	return m_presets.size()
 
 
 # Gives names to the presets as they will be presented to the user, so be sure
 # to use short and clear names.
 func get_preset_name(p_preset : int) -> String:
-    match p_preset:
-        m_presets.DEFAULT:
-            return "Default"
-        _:
-            return "Unknown"
+	match p_preset:
+		m_presets.DEFAULT:
+			return "Default"
+		_:
+			return "Unknown"
 
 
 # This is the method which defines the available options -- get_import_options()
@@ -85,23 +85,23 @@ func get_preset_name(p_preset : int) -> String:
 # that are checked to customize the option as its shown to the user.
 func get_import_options(_p_preset : int) -> Array:
 	#match p_preset:
-    #    m_presets.DEFAULT:
-    #        return [{
-    #                   "name": "use_red_anyway",
-    #                   "default_value": false,
-    #                   "property_hint": PropertyHint.FLAG
-    #                   "hint_string": "Available Hint"
-    #                   "usage": PropertyUsage.FLAG
-    #                }]
-    #    _:
-    #        return []
+	#	m_presets.DEFAULT:
+	#		return [{
+	#			"name": "use_red_anyway",
+	#			"default_value": false,
+	#			"property_hint": PropertyHint.FLAG
+	#			"hint_string": "Available Hint"
+	#			"usage": PropertyUsage.FLAG
+	#			}]
+	#		_:
+	#			return []
 	return []
 
 
 
 # Sets whether an import option should be shown in the import settings or not.
 func get_option_visibility(_p_option : String, _p_options : Dictionary) -> bool:
-    return true
+	return true
 
 
 # Tweak the import order just so the LibGDX atlas does not get imported before
@@ -110,6 +110,7 @@ func get_import_order() -> int:
 	# Import the atlas before the scenes
 	var import_order : int = ResourceImporter.IMPORT_ORDER_SCENE - 1
 	return import_order
+
 
 # The import function is where the heavy lifting to import a new resource
 # happens.
@@ -120,120 +121,118 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	# print("Options: " + str(p_options))
 
 	# Load the atlas reader:
-	var atlas_reader_gdscript : GDScript = load(get_script().get_path().get_base_dir().plus_file("libgdx_texture_packer_atlas_reader.gd"))
-	var libgdx_atlas_reader = atlas_reader_gdscript.new()
+	var libgdx_texture_packer_atlas_reader_gdscript : GDScript = load(get_script().get_path().get_base_dir().plus_file("libgdx_texture_packer_atlas_reader.gd"))
+	var libgdx_atlas_reader = libgdx_texture_packer_atlas_reader_gdscript.new()
 
-	# If there was an error opening the file -- inform the Editor
-	var error : int = libgdx_atlas_reader.open(p_source_file)
+	# If there was an error parsing the LibGDX TexturePacker Atlas, inform the Editor
+	var libgdx_parse_result : Dictionary = libgdx_atlas_reader.parse(p_source_file)
+	var error : int = libgdx_parse_result["error"]
 	if error != OK:
-		push_error("Unable to open atlas file: " + p_source_file)
-		return ERR_PARSE_ERROR
-
-	# Make sure we were able to read the header:
-	error = libgdx_atlas_reader.read_atlas_header()
-	if error != OK:
+		# NOTE: No need to print the error since it was done already. Only need to bubble up the error code to the Editor.
 		return error
 
-	# Grab the atlas texture filename
-	var atlas_texture_filename : String = libgdx_atlas_reader.get_atlas_texture_filename()
-	var atlas_texture_path : String = p_source_file.get_base_dir().plus_file(atlas_texture_filename)
-	var atlas_texture : StreamTexture = ResourceLoader.load(atlas_texture_path)
-	if not is_instance_valid(atlas_texture):
-		push_error("Required atlas texture hasn't been imported yet. This should not happen!")
-		libgdx_atlas_reader.close()
-		return ERR_CANT_OPEN
+	# There was no error. Grab the result:
+	var libgdx_atlas_data_dictionary : Dictionary = libgdx_parse_result["result"]
 
-	# Store all the atlas entries in an array for post processing later
-	var libgdx_atlas_entries_array : Array = []
-	while true:
-		# Extract atlas entry
-		var entry_dictionary : Dictionary = libgdx_atlas_reader.get_next_atlas_texture_entry()
-
-		# Store for post processing
-		libgdx_atlas_entries_array.push_back(entry_dictionary)
-
-		# Check if we are done processing the atlas
-		if entry_dictionary["eof_reached"] or entry_dictionary["success"] == false:
-			libgdx_atlas_reader.close()
-
-			# If there was an issue parsing the atlas entries, inform the Editor
-			if entry_dictionary["success"] == false:
-				return ERR_PARSE_ERROR
-
-			# No error occured, but we've reached eof.
-			# Need to break out of the infinite loop.
-			break
-
-	# Debug
-	#print(libgdx_atlas_entries_array)
-
-	# Make atlas_basename.sprites folder to store all the AtlasTexture resources there
-	var atlas_texture_resources_directory : String = p_source_file.get_basename() + ".sprites"
+	# Grab the base directory:
+	var libgdx_atlas_path : String = libgdx_atlas_data_dictionary["path"] # same as p_source_file in the current scope
+	var atlas_texture_resources_directory : String = libgdx_atlas_path.rstrip("." + libgdx_atlas_path.get_extension()) + ".atlas_textures"
+	# Make atlas_basename.atlas_textures folder to store all the AtlasTexture resources there
 	var directory : Directory = Directory.new()
 	if not directory.dir_exists(atlas_texture_resources_directory):
 		if directory.make_dir(atlas_texture_resources_directory) != OK:
 			push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas.")
 			return ERR_CANT_CREATE
 
-	# Convert libgdx atlas entries to AtlasTexture resources:
-	# NOTE: The last entry from the from the LibGDX Atlas reader only contains
-	# info on whether or not the atlas read was successful. This data was
-	# already processed in the loop above and can be ignored at this point.
-	# Convert atlas entries to texture
-	for libgdx_atlas_entry_index in range(0, libgdx_atlas_entries_array.size() - 1):
+	# For each packed texture found within the GDX Atlas
+	var libgdx_atlas_base_directory : String = libgdx_atlas_path.get_base_dir()
+	for packed_texture_dictionary in libgdx_atlas_data_dictionary["packed_textures"]:
+		# Grab the packed texture filename
+		var packed_texture_filename : String = packed_texture_dictionary["filename"]
 
-		var libgdx_atlas_entry : Dictionary = libgdx_atlas_entries_array[libgdx_atlas_entry_index]
-		var atlas_texture_resource : AtlasTexture = AtlasTexture.new()
+		# Generate the path of the packed texture relative to the GDX Atlas path
+		var packed_texture_path : String = libgdx_atlas_base_directory.plus_file(packed_texture_filename)
+		var libgdx_packed_texture_stream_texture : StreamTexture = load(packed_texture_path)
+		if not is_instance_valid(libgdx_packed_texture_stream_texture):
+			var error_message : String = "Unable to load texture atlas at: %s\n" % [ packed_texture_path ]
+			error_message += "Image was referenced by LibGDX TexturePacker Atlas file at: %s\n" % [ libgdx_atlas_path ]
+			push_error(error_message)
+			return ERR_CANT_OPEN
 
-		# Set the atlas texture in the resource:
-		atlas_texture_resource.set_atlas(atlas_texture)
+		# Make sure that the texture size matches what we've read from disk:
+		# NOTE: The texture size is the only common metadata between
+		# LibGDX TexturePacker Atlas formats (i.e. between the legacy
+		# and new LibGDX TexturePacker Atlas formats).
+		var libgdx_packed_texture_size : Vector2 = libgdx_packed_texture_stream_texture.get_size()
+		if libgdx_packed_texture_size != packed_texture_dictionary["settings"]["size"]:
+			var error_message : String = "Incorrect texture size found in LibGDX TexturePacker Atlas!\n"
+			error_message += "Make sure that the texture in the LibGDX TexturePacker Atlas at: %s\n" % [ p_source_file ]
+			error_message += "match the loaded texture at: %s" % [ packed_texture_path ]
+			push_error(error_message)
+			return ERR_CANT_ACQUIRE_RESOURCE
 
-		# Set the atlas texture resource region:
-		var libgdx_texture_position : Vector2 = libgdx_atlas_entry["xy"]
-		var libgdx_texture_size : Vector2 = libgdx_atlas_entry["size"]
-		atlas_texture_resource.set_region(Rect2(libgdx_texture_position, libgdx_texture_size))
+		# Convert GDX atlas texture entries within the packed texture dictionary into Godot's AtlasTexture resources:
+		for libgdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
+			# Create the AtlasTexture resource:
+			var atlas_texture_resource : AtlasTexture = AtlasTexture.new()
 
-		# Set the margin:
-		# NOTE: The coordinate system over the y axis within the LibGDX atlas
-		# changes for the texture offset and the original size -- that's the
-		# reason for flipping the y axis when setting the margin below, just so
-		# it conforms to Godot's standard:
-		var libgdx_texture_offset : Vector2 = libgdx_atlas_entry["offset"]
-		var libgdx_texture_original_size : Vector2 = libgdx_atlas_entry["orig"]
-		# NOTE: the texture offset denotes left-to-right and bottom-to-top offset,
-		# basically denoting the bottom_left edge of the rectangle for the sprite.
-		# The bottom_right_edge is undefined, but can be calculated:
-		var bottom_right_edge : Vector2 = libgdx_texture_original_size - libgdx_texture_size
-		# Debug
-		#print("Bottom Right Edge margin: " + str(bottom_right_edge))
-		# NOTE: Since the LibGDX texture offset y coordinate is considered to
-		# be flipped in Godot's coordinate system (since the the y axis in
-		# LibGDX is measured from bottom_to_top when calculating the offset,
-		# whereas Godot measures it from top_to_bottom), every pixel added over
-		# the y axis on the bottom_right_edge corner in Godot must be
-		# substracted from the LibGDX texture offset y axis. Otherwise the
-		# sprite offset location will be off over the y axis.  In other words,
-		# the bottom_right_edge corner in Godot's coordinate system fills the
-		# image from the right and bottom. The bottom fill minus the y offset
-		# as determined by LibGDX, is what we need to calculate the image
-		# offset in Godot's coordinate system.
-		var texture_margin : Rect2 = Rect2(libgdx_texture_offset.x, bottom_right_edge.y - libgdx_texture_offset.y, bottom_right_edge.x, bottom_right_edge.y)
-		# Debug
-		#print("Texture margin: " + str(texture_margin))
-		atlas_texture_resource.set_margin(texture_margin)
+			# Set the atlas texture in the resource:
+			atlas_texture_resource.set_atlas(libgdx_packed_texture_stream_texture)
 
-		# Generate new resource
-		var atlas_texture_resource_path_format = "%s/%s.%s"
-		var atlas_texture_resource_name : String = "%s_%s" % [ libgdx_atlas_entry["basename"], libgdx_atlas_entry["index"] ]
-		var atlas_texture_resource_save_path : String = atlas_texture_resource_path_format % [atlas_texture_resources_directory, atlas_texture_resource_name, get_save_extension()]
-		# Debug:
-		# print(atlas_texture_resource_save_path)
-		var is_save_successful : int = ResourceSaver.save(atlas_texture_resource_save_path, atlas_texture_resource)
-		if is_save_successful != OK:
-			return ERR_PARSE_ERROR
+			# Set the atlas texture resource region:
+			var libgdx_texture_position : Vector2 = libgdx_atlas_texture_dictionary["xy"]
+			var libgdx_texture_size : Vector2 = libgdx_atlas_texture_dictionary["size"]
+			atlas_texture_resource.set_region(Rect2(libgdx_texture_position, libgdx_texture_size))
 
-		# Let Godot know about the generated files during the import process
-		r_gen_files.push_back(atlas_texture_resource_save_path)
+			# Set the margin:
+			# NOTE: The coordinate system over the y axis within the LibGDX atlas
+			# changes for the texture offset and the original size -- that's the
+			# reason for flipping the y axis when setting the margin below, just so
+			# it conforms to Godot's standard:
+			var libgdx_texture_offset : Vector2 = libgdx_atlas_texture_dictionary["offset"]
+			var libgdx_texture_original_size : Vector2 = libgdx_atlas_texture_dictionary["orig"]
+			# NOTE: the texture offset denotes left-to-right and bottom-to-top offset,
+			# basically denoting the bottom_left edge of the rectangle for the sprite.
+			# The bottom_right_edge is undefined, but can be calculated:
+			var bottom_right_edge : Vector2 = libgdx_texture_original_size - libgdx_texture_size
+
+			# Debug
+			#print("Bottom Right Edge margin: " + str(bottom_right_edge))
+			# NOTE: Since the LibGDX texture offset y coordinate is considered to
+			# be flipped in Godot's coordinate system (since the the y axis in
+			# LibGDX is measured from bottom_to_top when calculating the offset,
+			# whereas Godot measures it from top_to_bottom), every pixel added over
+			# the y axis on the bottom_right_edge corner in Godot must be
+			# substracted from the LibGDX texture offset y axis. Otherwise the
+			# sprite offset location will be off over the y axis.  In other words,
+			# the bottom_right_edge corner in Godot's coordinate system fills the
+			# image from the right and bottom. The bottom fill minus the y offset
+			# as determined by LibGDX, is what we need to calculate the image
+			# offset in Godot's coordinate system.
+			var texture_margin : Rect2 = Rect2(libgdx_texture_offset.x, bottom_right_edge.y - libgdx_texture_offset.y, bottom_right_edge.x, bottom_right_edge.y)
+
+			# Debug
+			#print("Texture margin: " + str(texture_margin))
+			atlas_texture_resource.set_margin(texture_margin)
+
+			# Generate new resource
+			var atlas_texture_resource_path_format = "%s/%s.%s"
+			var atlas_texture_resource_name : String
+			if libgdx_atlas_texture_dictionary["index"] != "-1":
+				atlas_texture_resource_name = "%s_%s" % [ libgdx_atlas_texture_dictionary["basename"], libgdx_atlas_texture_dictionary["index"] ]
+			else:
+				atlas_texture_resource_name = libgdx_atlas_texture_dictionary["basename"]
+			var atlas_texture_resource_save_path : String = atlas_texture_resource_path_format % [atlas_texture_resources_directory, atlas_texture_resource_name, get_save_extension()]
+
+			# Debug:
+			#print("Saving to: ", atlas_texture_resource_save_path)
+
+			var is_save_successful : int = ResourceSaver.save(atlas_texture_resource_save_path, atlas_texture_resource)
+			if is_save_successful != OK:
+				return ERR_PARSE_ERROR
+
+			# Let Godot know about the generated files during the import process
+			r_gen_files.push_back(atlas_texture_resource_save_path)
 
 	# Do the final for the original import (p_source_file):
 	# NOTE: Here we save the LibGDX Atlas file as a raw Resource because the
