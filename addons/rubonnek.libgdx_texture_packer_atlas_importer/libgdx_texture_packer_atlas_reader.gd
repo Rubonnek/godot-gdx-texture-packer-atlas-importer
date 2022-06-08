@@ -1,6 +1,6 @@
 # The MIT License (MIT)
 #
-# Copyright (c) 2021 Wilson E. Alvarez
+# Copyright (c) 2021-2022 Wilson E. Alvarez
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,286 +22,189 @@
 
 extends Reference
 
-enum m_atlas_reader_states { READING_HEADER, PROCESSING_ENTRIES }
-var m_reader_state : int  = m_atlas_reader_states.READING_HEADER
+enum m_atlas_reader_states { READING_TEXTURE_HEADER, READING_ATLAS_TEXTURES }
+var m_reader_state : int  = m_atlas_reader_states.READING_TEXTURE_HEADER
 enum m_libgdx_atlas_formats { LEGACY, NEW }
 var m_detected_atlas_format : int = m_libgdx_atlas_formats.LEGACY
-var m_file_handle : File = File.new()
-var m_texture_filename : String
-var m_atlas_path : String
+
 var m_whitespace_regex : RegEx = RegEx.new()
 
-
-# For opening atlas file
-func open(p_atlas_path : String) -> int:
-	if m_file_handle.is_open():
-		m_file_handle.close()
-	m_atlas_path = p_atlas_path
-	m_whitespace_regex.compile("\\s")
-	var open_error : int = m_file_handle.open(p_atlas_path, File.READ)
-	return open_error
+func _init() -> void:
+	# Compile the whitespace regex - we are going to use this soon to clean up the LibGDX Texture Packer Atlas text to make it easier to process:
+	var _success : int = m_whitespace_regex.compile("\\s")
 
 
-# For closing the atlas file
-func close() -> void:
-	m_file_handle.close()
+# Internal function for reading the atlas header -- returns the number of lines read
+func __read_texture_metadata(p_libgdx_atlas_pool_string_array : PoolStringArray, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
+	assert(m_reader_state == m_atlas_reader_states.READING_TEXTURE_HEADER, "Wrong reader state for reading the texture metadata! Set \"m_reader_state\" to \"m_atlas_reader_states.READING_TEXTURE_HEADER\" before calling this function!")
 
-
-# For extracting the image the atlas refers to
-func get_atlas_texture_filename() -> String:
-	assert(m_reader_state != m_atlas_reader_states.READING_HEADER, "Unable to read next atlas texture. Call \"read_atlas_header\" first!")
-	return m_texture_filename
-
-
-# Internal function for reading the atlas header
-func read_atlas_header() -> int:
-	# If the header has been read already, no need to continue
-	if m_reader_state == m_atlas_reader_states.PROCESSING_ENTRIES:
-		push_warning("LibGDX Atlas header already read. Ignoring...")
-		return OK
-
-	# The header hasn't been read at this point. Let's do so.
-	if m_file_handle.is_open() and m_reader_state == m_atlas_reader_states.READING_HEADER:
-		# Detect the LibGDx Atlas format -- whether it's Legacy or New
-
-		# NOTE: In the legacy format the data structures are more granular.
-		# The new format is more concise and compact. Both formats contain the
-		# same information, just in different places.
-
-		# By just reading first line of the atlas we can know which format it belongs to.
-		var first_line : String = m_file_handle.get_line()
-		m_file_handle.seek(0)
-		if first_line == "":
-			m_detected_atlas_format = m_libgdx_atlas_formats.LEGACY
-		else:
-			m_detected_atlas_format = m_libgdx_atlas_formats.NEW
-
-		# Read the header:
-		if m_detected_atlas_format == m_libgdx_atlas_formats.LEGACY:
-			var error : int = __read_legacy_atlas_header()
-			if error != OK:
-				return error
-		elif m_detected_atlas_format == m_libgdx_atlas_formats.NEW:
-			var error : int = __read_new_atlas_header()
-			if error != OK:
-				return error
-		else:
-			push_error("Unknown atlas format! This should not happen!")
-			return ERR_PARSE_ERROR
-
-		# Update reader state
-		m_reader_state = m_atlas_reader_states.PROCESSING_ENTRIES
-		return OK
+	# Read the header:
+	if m_detected_atlas_format == m_libgdx_atlas_formats.LEGACY:
+		return __read_legacy_texture_metadata(p_libgdx_atlas_pool_string_array, p_starting_at_line, r_packed_texture_dictionary)
+	elif m_detected_atlas_format == m_libgdx_atlas_formats.NEW:
+		return __read_new_texture_metadata(p_libgdx_atlas_pool_string_array, p_starting_at_line, r_packed_texture_dictionary)
 	else:
-		if not m_file_handle.is_open():
-			push_warning("Unable to read header -- atlas file has not been opened for reading!")
-			return ERR_PARSE_ERROR
+		push_error("Unknown atlas format! This should not happen! Unable to parse LibGDX Texture Packer Atlas!")
+		r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+		return 0
+
+
+# Reads the legacy format texture settings and returns the number of lines read
+func __read_legacy_texture_metadata(p_libgdx_atlas_pool_string_array : PoolStringArray, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
+	var header_size_in_number_of_lines : int = 4
+	var number_of_lines_read : int = 0
+	for header_line_index in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
+		# Do a sanity check on the line index we are about to read
+		if header_line_index > p_libgdx_atlas_pool_string_array.size() - 1:
+			# Sample Legacy Texture Metadata:
+			var sample_legacy_texture_metadata : String = "\n"
+			sample_legacy_texture_metadata += "size: 128, 256\n"
+			sample_legacy_texture_metadata += "format: RGBA8888\n"
+			sample_legacy_texture_metadata += "filter: Nearest, Nearest\n"
+			sample_legacy_texture_metadata += "repeat: none\n"
+			push_error("Malformed atlas header! Check that the LibGDX Texture Packer Atlas file is not corrupted -- the header should have six lines (including a blank line) and look similar to:\n %s" % sample_legacy_texture_metadata)
+			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+			return number_of_lines_read
+
+		# Read the settings key-value pair:
+		var key_value_pair : PoolStringArray = p_libgdx_atlas_pool_string_array[header_line_index].split(":")
+		number_of_lines_read += 1
+		var key : String = key_value_pair[0]
+		var value : String = key_value_pair[1]
+
+		# Properly convert supported types:
+		# NOTE: Here we are only converting the texture size because
+		# it's the only common setting between LibGDX TexturePacker
+		# Atlas formats (i.e. the legacy and new formats).
+		if key == "size":
+			var xy_coordinates_pool_string_array : PoolStringArray = value.split(",")
+			r_packed_texture_dictionary["settings"][key] = Vector2(int(xy_coordinates_pool_string_array[0]), int(xy_coordinates_pool_string_array[1]))
 		else:
-			push_warning("Unknown reader state! This should not happen!")
-			return ERR_PARSE_ERROR
+			# Inject the setting as-is into the dictionary
+			r_packed_texture_dictionary["settings"][key] = value
+
+	return number_of_lines_read
 
 
-# Returns an array with two entries:
-# The first one is whether the entry extraction was successful. This is so we
-# can bubble up any errors up to the Editor so it's aware.
-# If the entry read was successful, the second entry in the array is a
-# dictionary containing the atlas_texture entry.
-func get_next_atlas_texture_entry() -> Dictionary:
+# Reads the new format texture settings and returns the number of lines read
+func __read_new_texture_metadata(p_libgdx_atlas_pool_string_array : PoolStringArray, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
+	var header_size_in_number_of_lines : int = 2
+	var number_of_lines_read : int = 0
+	for header_line_index in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
+		# Do a sanity check on the line index we are about to read
+		if header_line_index > p_libgdx_atlas_pool_string_array.size() - 1:
+			# Sample New Texture Metadata:
+			var sample_new_texture_metadata : String = "\n"
+			sample_new_texture_metadata += "size:128,256\n"
+			sample_new_texture_metadata += "repeat:none\n"
+			push_error("Malformed atlas header! Check the file is not corrupted -- the header should have six lines (including a blank line) and look similar to:\n %s" % sample_new_texture_metadata)
+			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+			return number_of_lines_read
+
+		# Read the settings key-value pair:
+		var key_value_pair : PoolStringArray = p_libgdx_atlas_pool_string_array[header_line_index].split(":")
+		number_of_lines_read += 1
+		var key : String = key_value_pair[0]
+		var value : String = key_value_pair[1]
+
+		# Properly convert supported types:
+		# NOTE: Here we are only converting the texture size because
+		# it's the only common setting between LibGDX TexturePacker
+		# Atlas formats (i.e. the legacy and new formats).
+		if key == "size":
+			var xy_coordinates_pool_string_array : PoolStringArray = value.split(",")
+			r_packed_texture_dictionary["settings"][key] = Vector2(int(xy_coordinates_pool_string_array[0]), int(xy_coordinates_pool_string_array[1]))
+		else:
+			# Inject the setting as-is into the dictionary
+			r_packed_texture_dictionary["settings"][key] = value
+
+	return number_of_lines_read
+
+
+# Returns the number of lines read from the atlas texture
+func __get_next_atlas_texture_entry(p_libgdx_atlas_pool_string_array : PoolStringArray, p_source_file : String, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
 	# Most of the header data can eb skippes
-	assert(m_reader_state != m_atlas_reader_states.READING_HEADER, "Unable to read next atlas texture. Call \"read_atlas_header\" first!")
+	assert(m_reader_state != m_atlas_reader_states.READING_TEXTURE_HEADER, "Unable to read next atlas texture. Call \"__read_texture_metadata\" first!")
 
 	# Get the atlas texture entry
 	if m_detected_atlas_format == m_libgdx_atlas_formats.LEGACY:
-		return __extract_sprite_entry_in_legacy_atlas_format()
+		return __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas_pool_string_array, p_source_file, p_starting_at_line, r_packed_texture_dictionary)
 	elif m_detected_atlas_format == m_libgdx_atlas_formats.NEW:
-		return __extract_sprite_entry_in_new_atlas_format()
+		return __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_pool_string_array, p_source_file, p_starting_at_line, r_packed_texture_dictionary)
 	else:
-		push_error("Unknown LibGDX Atlas format! This should not happen!")
-		return __generate_malformed_atlas_dictionary()
+		push_error("Unknown LibGDX TexturePacker Atlas format! This should not happen!")
+		r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+		return 0
 
 
-func __read_legacy_atlas_header() -> int:
-	for header_line_index in range(0, 6):
-		# At any point during the the header read. If we reach eof, it would be a malformed header.
-		if m_file_handle.eof_reached():
-			var sample_legacy_header : String = "\n"
-			sample_legacy_header += "texture_filename.png\n"
-			sample_legacy_header += "size: 128, 256\n"
-			sample_legacy_header += "format: RGBA8888\n"
-			sample_legacy_header += "filter: Nearest, Nearest\n"
-			sample_legacy_header += "repeat: none\n"
-			push_error("Malformed atlas header! Check the file is not corrupted -- the header should have six lines (including a blank line) and look similar to:\n %s" % sample_legacy_header)
-			return ERR_PARSE_ERROR
-
-		if header_line_index == 1:
-			m_texture_filename = m_file_handle.get_line()
-			var texture_path = m_atlas_path.get_base_dir().plus_file(m_texture_filename)
-			if not m_file_handle.file_exists(texture_path):
-				push_error("Unable to find atlas texture at: " + texture_path + "\nCannot continue importing LibGDX Atlas")
-				return ERR_PARSE_ERROR
-		else:
-			var _discard : String = m_file_handle.get_line()
-	return OK
-
-
-func __read_new_atlas_header() -> int:
-	for header_line_index in range(0, 3):
-		# At any point during the the header read. If we reach eof, it would be a malformed header.
-		if m_file_handle.eof_reached():
-			var sample_new_header : String = "texture_filename.png\n"
-			sample_new_header += "size:128,256\n"
-			sample_new_header += "repeat:none\n"
-			push_error("Malformed atlas header! Check the file is not corrupted -- the header should have six lines (including a blank line) and look similar to:\n %s" % sample_new_header)
-			return ERR_PARSE_ERROR
-
-		if header_line_index == 0:
-			m_texture_filename = m_file_handle.get_line()
-			var texture_path = m_atlas_path.get_base_dir().plus_file(m_texture_filename)
-			if not m_file_handle.file_exists(texture_path):
-				push_error("Unable to find atlas texture at: " + texture_path + "\nCannot continue importing LibGDX Atlas")
-				return ERR_PARSE_ERROR
-		else:
-			var _discard : String = m_file_handle.get_line()
-	return OK
-
-
-# Helper function to return successful atlas read status
-func __generate_eof_dictionary() -> Dictionary:
-		var eof_reached : bool = true
-		var extraction_success : bool = true
-		var libgdx_atlas_entry : Dictionary = {
-				"success" : extraction_success,
-				"eof_reached" : eof_reached
-				}
-		return libgdx_atlas_entry
-
-
-# Helper function to return successful atlas entry read status
-func __generate_successful_atlas_entry_read_dictionary() -> Dictionary:
-		var eof_reached : bool = false
-		var extraction_success : bool = true
-		var libgdx_atlas_entry : Dictionary = {
-				"success" : extraction_success,
-				"eof_reached" : eof_reached
-				}
-		return libgdx_atlas_entry
-
-
-# Helper function to report issues to the Edior
-func __generate_malformed_atlas_dictionary() -> Dictionary:
-	# If this function is called, the GDX atlas texture is a malformed file.
-	# Inform the editor with the following dictionary to bubble up this issue:
-	var eof_reached : bool = true
-	var extraction_success : bool = false
-	var libgdx_atlas_entry : Dictionary = {
-			"success" : extraction_success,
-			"eof_reached" : eof_reached
-			}
-	return libgdx_atlas_entry
-
-
-func __extract_sprite_entry_in_legacy_atlas_format() -> Dictionary:
+# Returns the number of lines read from the atlas texture
+func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas_pool_string_array : PoolStringArray, p_source_file : String, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
 	# At this point the atlas HEADER should have been read.
-	assert(m_reader_state == m_atlas_reader_states.PROCESSING_ENTRIES)
+	assert(m_reader_state == m_atlas_reader_states.READING_ATLAS_TEXTURES)
 
+	# Grab the sprite basename -- there's a chance this could return empty
+	# because we have reached the end of file:
+	var current_line_to_read : int = p_starting_at_line
+	var godot_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
+	current_line_to_read += 1
+
+	# In-scope variables to store the values we are going to return in
+	# Godot format where possible. Otherwise we'll use raw LibGDX format.
+	var godot_atlas_texture_rotate : bool = false
+	var godot_atlas_texture_position_vector : Vector2
+	var godot_atlas_texture_size_vector : Vector2
+	var godot_atlas_texture_original_size_vector : Vector2
+	var godot_atlas_texture_offset_vector : Vector2
+	var godot_atlas_texture_index_string : String
+
+	# Start looping over the key-value pairs of the atlas
+	var libgdx_atlas_texture_entry_format_lines_to_read : int = 6
 	# NOTE: The GDX TexturePacker GUI tool at: https://github.com/crashinvaders/gdx-texture-packer-gui
-	# Outputs each atlas sprite entry as follows, in the same order:
-	#	sprite_basename
+	# Outputs each LibGDX atlas texture entry as follows, in the same order:
+	#	godot_atlas_texture_basename
 	#	  rotate: false
 	#	  xy: 2, 2
 	#	  size: 27, 31
 	#	  orig: 32, 32
 	#	  offset: 3, 1
 	#	  index: 3
-
-	# Grab the sprite basename -- there's a chance this could return empty
-	# because we have reached the end of file:
-	var sprite_basename : String = m_file_handle.get_line()
-
-	# Check if we have reached the end of file -- if so, this was a successful read of the atlas.
-	if m_file_handle.eof_reached():
-		return __generate_eof_dictionary()
-
-	# In-scope variables to store the values we are going to return
-	var rotate : bool
-	var sprite_position_vector : Vector2
-	var sprite_size_vector : Vector2
-	var sprite_original_size_vector : Vector2
-	var sprite_offset_vector : Vector2
-	var sprite_index_string : String
-	var extraction_success : bool = true
-	var eof_reached : bool = false
-
-	# Initialized expected atlas entry error message format
-	var expected_atlas_entry_error_message_format : String = "Expected \"%s\" entry. Instead got:\n"
-	expected_atlas_entry_error_message_format += "\t%s\n\n"
-	expected_atlas_entry_error_message_format += "Make sure the entries in the atlas are in the following format where the keys are in the same order:\n"
-	expected_atlas_entry_error_message_format += "sprite_basename\n"
-	expected_atlas_entry_error_message_format += "  rotate: false\n"
-	expected_atlas_entry_error_message_format += "  xy: 2, 2\n"
-	expected_atlas_entry_error_message_format += "  size: 27, 31\n"
-	expected_atlas_entry_error_message_format += "  orig: 32, 32\n"
-	expected_atlas_entry_error_message_format += "  offset: 3, 1\n"
-	expected_atlas_entry_error_message_format += "  index: 3\n"
-
-
-	# Start looping over the key-value pairs of the atlas
-	for atlas_entry_index in range(0,6):
-		# Grab atlas key-value pair
-		var atlas_entry_key_value : String = m_file_handle.get_line()
-
+	# And we expect to see these 6 entries always. If we don't, show an error
+	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
 		# Check if we have reached the end of file -- the file is malformed at this
-		# stage if we reach eof.
-		if m_file_handle.eof_reached():
-			return __generate_malformed_atlas_dictionary()
+		# stage if we reach eof. This should not happen.
+		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
+			push_error("Malformed LibGDX TexturePacker atlas. Didn't expect to reach end of atlas \"%s\" at line %d." % [ p_source_file, current_line_to_read - 1])
+			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+			return current_line_to_read - p_starting_at_line
 
-		# Setup expected atlas entry
-		var expected_atlas_entry_key : String
-		match atlas_entry_index:
-			0:
-				expected_atlas_entry_key = "rotate"
-			1:
-				expected_atlas_entry_key = "xy"
-			2:
-				expected_atlas_entry_key = "size"
-			3:
-				expected_atlas_entry_key = "orig"
-			4:
-				expected_atlas_entry_key = "offset"
-			5:
-				expected_atlas_entry_key = "index"
-
-		# Do a sanity check over the expected entry and what we actually read from the file
-		if !(expected_atlas_entry_key in atlas_entry_key_value):
-			push_error(expected_atlas_entry_error_message_format % [ expected_atlas_entry_key, atlas_entry_key_value ])
-			return __generate_malformed_atlas_dictionary()
+		# Grab atlas key-value pair
+		var libgdx_atlas_texture_entry_key_value_pair_array : Array = p_libgdx_atlas_pool_string_array[libgdx_texture_packer_atlas_texture_entry_line].split(":")
+		current_line_to_read += 1
+		var libgdx_atlas_texture_entry_key : String = libgdx_atlas_texture_entry_key_value_pair_array[0]
+		var libgdx_atlas_texture_entry_value : String = libgdx_atlas_texture_entry_key_value_pair_array[1]
 
 		# Process atlas entry
-		match atlas_entry_index:
-			0:
-				# Process Rotate entry
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					var rotate_string : String = atlas_entry_key_value.split(": ")[1]
-					if "false" in rotate_string:
-						rotate = false
-					else:
-						# NOTE: It's impossible to tell Godot to rotate the sprites.
-						push_error("Godot does not support rotated sprites in atlases. Please fix your LibGDX TexturePacker project to avoid rotating sprites.")
-						return __generate_malformed_atlas_dictionary()
+		match libgdx_atlas_texture_entry_key:
+			"rotate":
+				# Process Rotate entry -- if it's not false, we can't process this LibGDX TexturePacker Atlas in Godot
+				if not "false" in libgdx_atlas_texture_entry_value:
+					# NOTE: It's impossible to tell Godot to rotate the AtlasTextures -- need to bubble up an error if this happens.
+					push_error("Found rotated texture in LibGDX TexturePacker Atlas file at \"%s\".\nGodot does not support rotated AtlasTexture resources.\nPlease disable texture rotation in your LibGDX TexturePacker project and repack the atlas." % [ p_source_file ])
+					r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+					return current_line_to_read - p_starting_at_line
 
-			1:
+			"xy":
 				# Process Sprite Position
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					var sprite_position_on_atlas_array : Array = atlas_entry_key_value.split(": ")[1].split(", ")
-					var sprite_position_x_string : String = sprite_position_on_atlas_array[0]
-					var sprite_position_y_string : String = sprite_position_on_atlas_array[1]
-					sprite_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
+				var sprite_position_on_atlas_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_position_x_string : String = sprite_position_on_atlas_array[0]
+				var sprite_position_y_string : String = sprite_position_on_atlas_array[1]
+				godot_atlas_texture_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
 
-			2:
+			"size":
 				# Process Sprite Size
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
@@ -309,227 +212,478 @@ func __extract_sprite_entry_in_legacy_atlas_format() -> Dictionary:
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
 				# Also, this sprite size may differ from the original since
 				# transparent borders may be trimmed to save space.
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					var sprite_size_array : Array = atlas_entry_key_value.split(": ")[1].split(", ")
-					var sprite_size_x_string : String = sprite_size_array[0]
-					var sprite_size_y_string : String = sprite_size_array[1]
-					sprite_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
+				var sprite_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_size_x_string : String = sprite_size_array[0]
+				var sprite_size_y_string : String = sprite_size_array[1]
+				godot_atlas_texture_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
 
-			3:
+			"orig":
 				# Sprite Original Size
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					var sprite_original_size_array : Array = atlas_entry_key_value.split(": ")[1].split(", ")
-					var sprite_original_size_x_string : String = sprite_original_size_array[0]
-					var sprite_original_size_y_string : String = sprite_original_size_array[1]
-					sprite_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
+				var sprite_original_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_original_size_x_string : String = sprite_original_size_array[0]
+				var sprite_original_size_y_string : String = sprite_original_size_array[1]
+				godot_atlas_texture_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
 
-			4:
+			"offset":
 				# Sprite Offset
 				# NOTE The coordinates of the sprite offset based from the original image are measured as follows:
 				# x: from left to right
 				# y: from bottom to top
 				# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					var sprite_offset_array : Array = atlas_entry_key_value.split(": ")[1].split(", ")
-					var sprite_offset_x_string : String = sprite_offset_array[0]
-					var sprite_offset_y_string : String = sprite_offset_array[1]
-					sprite_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
+				var sprite_offset_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_offset_x_string : String = sprite_offset_array[0]
+				var sprite_offset_y_string : String = sprite_offset_array[1]
+				godot_atlas_texture_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
 
-			5:
+			"index":
 				# Sprite Index
 				# NOTE: When a set of sprite filenames such as "run_0.png",
 				# "run_1.png", "run_2.png" are included in an atlas, the sprite frame
 				# numbers 0, 1, and 2 respectively ends up as the index entry in the
 				# atlas file.
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					sprite_index_string = atlas_entry_key_value.split(": ")[1]
+				godot_atlas_texture_index_string = libgdx_atlas_texture_entry_value
 
-	# Construct sprite entry found in the atlas -- this is all the information
-	# that's required to construct a TextureAtlas resource.
-	# The only two extra entries in the dictionary are "success" which
-	# determines if the sprite entry read was successful, and "eof_reached"
-	# that determines whether we are done reading the atlas file but this value
-	# should always be false at this point.
-	var sprite_entry_dictionary : Dictionary = {
-			"basename" : sprite_basename,
-			"rotate" : rotate,
-			"xy" : sprite_position_vector,
-			"size" : sprite_size_vector,
-			"orig" : sprite_original_size_vector,
-			"offset" : sprite_offset_vector,
-			"index" : sprite_index_string,
-			"success" : extraction_success,
-			"eof_reached" : eof_reached,
+			_:
+				push_error("Found unknown LibGDX TexturePacker Atlas texture entry key : \"%s\" in file \"%s\" at line %d" % [ libgdx_atlas_texture_entry_key, p_source_file, current_line_to_read - 1 ])
+				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+				return current_line_to_read - p_starting_at_line
+
+	# Construct LibGDX atlas texture entry dictionary found in the atlas --
+	# this is all the information that's required to construct a Godot
+	# AtlasTexture resource.
+	var atlas_texture_entry_dictionary : Dictionary = {
+			"basename" : godot_atlas_texture_basename,
+			"rotate" : godot_atlas_texture_rotate,
+			"xy" : godot_atlas_texture_position_vector,
+			"size" : godot_atlas_texture_size_vector,
+			"orig" : godot_atlas_texture_original_size_vector,
+			"offset" : godot_atlas_texture_offset_vector,
+			"index" : godot_atlas_texture_index_string,
 			}
 
+	# Push the atlas_texture_entry_dictionary into r_packed_texture_dictionary
+	r_packed_texture_dictionary["atlas_textures"].push_back(atlas_texture_entry_dictionary)
+
 	# Debug
-	# print(sprite_entry_dictionary)
-	return sprite_entry_dictionary
+	#print(atlas_texture_entry_dictionary)
+	return current_line_to_read - p_starting_at_line
 
 
-func __extract_sprite_entry_in_new_atlas_format() -> Dictionary:
+# In order to process the new LibGDX TexturePacker Atlas format, we need to know what keys we expect to read under each atlas texture.
+# This constant is only meant to be used by the function: __get_next_libgdx_atlas_texture_entry_in_new_atlas_format
+const m_expected_new_libgdx_texture_packer_atlas_format_keys : Array = [
+			"index",
+			"bounds",
+			"offsets",
+			"rotate",
+			]
+
+
+# Returns the number of lines it read from the atlas texture
+func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_pool_string_array : PoolStringArray, p_source_file : String, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
 	# At this point the atlas HEADER should have been read.
-	assert(m_reader_state == m_atlas_reader_states.PROCESSING_ENTRIES)
+	assert(m_reader_state == m_atlas_reader_states.READING_ATLAS_TEXTURES)
 
 	# NOTE: The GDX TexturePacker GUI tool at: https://github.com/crashinvaders/gdx-texture-packer-gui
 	# Outputs each atlas sprite entry as follows, in the same order:
-	#	sprite_basename
+	#	libgdx_atlas_texture_basename
 	#		index: 3
 	#		bounds: 2, 2, 27, 31
 	#		offsets: 3, 1, 32, 32
 	#		rotate: true
+	# However, the new format only shows most entries only when needed. The only constant is the atlas texture bounds which is required.
 
 	# The pretty-print is the version shown above. The non-pretty-print version is the exact same except all whitespace is eliminated on each row.
 
+	# Check if we have reached the end of file -- if so, this was a successful read of the atlas.
+	if p_starting_at_line > p_libgdx_atlas_pool_string_array.size() - 1:
+		return 0
 
 	# Grab the sprite basename -- there's a chance this could return empty
 	# because we have reached the end of file:
-	var sprite_basename : String = m_file_handle.get_line()
+	var current_line_to_read : int = p_starting_at_line
+	var godot_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
+	current_line_to_read += 1
 
-	# Check if we have reached the end of file -- if so, this was a successful read of the atlas.
-	if m_file_handle.eof_reached():
-		return __generate_eof_dictionary()
+	# Debug
+	#print("Processing LibGDX texture: ", godot_atlas_texture_basename)
 
-	# In-scope variables to store the values we are going to return
-	var rotate : bool
-	var sprite_position_vector : Vector2
-	var sprite_size_vector : Vector2
-	var sprite_original_size_vector : Vector2
-	var sprite_offset_vector : Vector2
-	var sprite_index_string : String
-	var extraction_success : bool = true
-	var eof_reached : bool = false
-
-	# Initialized expected atlas entry error message format
-	var expected_atlas_entry_error_message_format : String = "Expected \"%s\" entry. Instead got:\n"
-	expected_atlas_entry_error_message_format += "\t%s\n\n"
-	expected_atlas_entry_error_message_format += "Make sure the entries in the atlas are in the following format where the keys are in the same order:\n"
-	expected_atlas_entry_error_message_format += "\tsprite_basename\n"
-	expected_atlas_entry_error_message_format += "\t\tindex: 3\n"
-	expected_atlas_entry_error_message_format += "\t\tbounds: 2, 2, 27, 31\n"
-	expected_atlas_entry_error_message_format += "\t\toffsets: 3, 1, 32, 32\n"
-	expected_atlas_entry_error_message_format += "\t\trotate: true\n"
+	# In-scope variables to store the values we are going to return in
+	# Godot format where possible. Otherwise we'll use raw LibGDX format.
+	var godot_atlas_texture_rotate : bool = false
+	var godot_atlas_texture_position_vector : Vector2
+	var godot_atlas_texture_size_vector : Vector2
+	var godot_atlas_texture_original_size_vector : Vector2
+	var godot_atlas_texture_offset_vector : Vector2
+	var godot_atlas_texture_index_string : String = "-1" # this is the default in the legacy format and it means there are no other atlas textures with similar names
 
 	# Start looping over the key-value pairs of the atlas
-	for atlas_entry_index in range(0,3):
+	var libgdx_atlas_texture_entry_format_lines_to_read : int = 4
+	# NOTE: We use the following PoolStringArray and Dictionary for sanity checking later on
+	# NOTE: The was_bounds_key_seen variable below is only used to make
+	# sure we've at least read what we need from the new LibGDX
+	# TexturePacker format in order to create the AtlasTexture resource in
+	# Godot.
+	var was_bounds_key_seen : bool = false
+	# NOTE: The was_offsets_key_seen variable below is used to make sure we
+	# know what the original texture size is (i.e. what the 'orig' entry is
+	# in the legacy LibGDX TexturePacker Atlas format). If the 'offsets' key is not seen
+	# within the new format, then that means the original texture size is
+	# the same as what appears in the 'bounds' key.
+	var was_offsets_key_seen : bool = false
+	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
+		# If we reach eof, we've reached the end of the file and that's completely fine.
+		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
+			if not was_bounds_key_seen:
+				# We didn't read the necessary key -- we got to EOF before we could read it. This means this LibGDX atlas file is malformed.
+				push_error("Malformed LibGDX atlas found at \"%s\".\nReached end of file before the 'bounds' key was read for the atlas texture with basename \"%s\"\n" % [ p_source_file, godot_atlas_texture_basename ])
+				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+				return current_line_to_read - p_starting_at_line
+			break
+
 		# Grab atlas key-value pair
-		var atlas_entry_key_value : String = m_file_handle.get_line()
-		# Remove the whitespace from the atlas entry -- this way even if the
-		# new format gets pretty-printed, we'll be able to process it:
-		atlas_entry_key_value = m_whitespace_regex.sub(atlas_entry_key_value, "", true)
+		var libgdx_atlas_texture_entry_key_value_pair_array : Array = p_libgdx_atlas_pool_string_array[libgdx_texture_packer_atlas_texture_entry_line].split(":")
 
-		# Check if we have reached the end of file -- the file is malformed at this
-		# stage if we reach eof.
-		if m_file_handle.eof_reached():
-			return __generate_malformed_atlas_dictionary()
+		# Check that the key we got is supported
+		var libgdx_atlas_texture_entry_key : String = libgdx_atlas_texture_entry_key_value_pair_array[0]
+		if not libgdx_atlas_texture_entry_key in m_expected_new_libgdx_texture_packer_atlas_format_keys:
+			if was_bounds_key_seen:
+				break
+			else:
+				# We didn't read the necessary key -- this LibGDX atlas file is malformed.
+				push_error("Malformed LibGDX atlas found at \"%s\".\nCould not find 'bounds' key around line %d for atlas texture with basename \"%s\"" % [ p_source_file, current_line_to_read, godot_atlas_texture_basename ])
+				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+				return current_line_to_read - p_starting_at_line
 
-		# Setup expected atlas entry
-		var expected_atlas_entry_key : String
-		match atlas_entry_index:
-			0:
-				expected_atlas_entry_key = "index"
-			1:
-				expected_atlas_entry_key = "bounds"
-			2:
-				expected_atlas_entry_key = "offsets"
+		# We got a compatible key -- update the line to read counter
+		current_line_to_read += 1
 
-		# Do a sanity check over the expected entry and what we actually read from the file
-		if !(expected_atlas_entry_key in atlas_entry_key_value):
-			push_error(expected_atlas_entry_error_message_format % [ expected_atlas_entry_key, atlas_entry_key_value ])
-			return __generate_malformed_atlas_dictionary()
-
+		# Extract key and value
+		var libgdx_atlas_texture_entry_value : String = libgdx_atlas_texture_entry_key_value_pair_array[1]
 
 		# Process atlas entry
-
-		# Debug
-		#print(atlas_entry_key_value)
-		match atlas_entry_index:
-			0:
+		match libgdx_atlas_texture_entry_key:
+			"index":
 				# Sprite Index
 				# NOTE: When a set of sprite filenames such as "run_0.png",
 				# "run_1.png", "run_2.png" are included in an atlas, the sprite frame
 				# numbers 0, 1, and 2 respectively ends up as the index entry in the
 				# atlas file.
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					sprite_index_string = atlas_entry_key_value.split(":")[1]
+				godot_atlas_texture_index_string = libgdx_atlas_texture_entry_value
 
-			1:
+			"bounds":
 				# The bounds include the Sprite Position and the Sprite Size
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					# Sprite Position
-					# NOTE The coordinates of sprite position on atlas are measured as follows:
-					# x: from left to right
-					# y: from top to bottom
-					# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-					var sprite_bounds_array : Array = atlas_entry_key_value.split(":")[1].split(",")
-					var sprite_position_x_string : String = sprite_bounds_array[0]
-					var sprite_position_y_string : String = sprite_bounds_array[1]
-					sprite_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
+				was_bounds_key_seen = true
 
-					# Sprite Size
-					# NOTE The coordinates of sprite position on atlas are measured as follows:
-					# x: from left to right
-					# y: from top to bottom
-					# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-					# Also, this sprite size may differ from the original since
-					# transparent borders may be trimmed to save space.
-					var sprite_size_x_string : String = sprite_bounds_array[2]
-					var sprite_size_y_string : String = sprite_bounds_array[3]
-					sprite_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
+				# Sprite Position
+				# NOTE The coordinates of sprite position on atlas are measured as follows:
+				# x: from left to right
+				# y: from top to bottom
+				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
+				var sprite_bounds_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_position_x_string : String = sprite_bounds_array[0]
+				var sprite_position_y_string : String = sprite_bounds_array[1]
+				godot_atlas_texture_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
 
-			2:
+				# Sprite Size
+				# NOTE The coordinates of sprite position on atlas are measured as follows:
+				# x: from left to right
+				# y: from top to bottom
+				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
+				# Also, this sprite size may differ from the original since
+				# transparent borders may be trimmed to save space.
+				var sprite_size_x_string : String = sprite_bounds_array[2]
+				var sprite_size_y_string : String = sprite_bounds_array[3]
+				godot_atlas_texture_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
+
+			"offsets":
 				# The "offsets" entry in the new format really includes two
 				# pieces of information.
 				#	1) the actual position offset of the image, and
 				#	2) the sprite original size.
-				if expected_atlas_entry_key in atlas_entry_key_value:
-					# Sprite Offset
-					# NOTE The coordinates of the sprite offset based from the original image are measured as follows:
-					# x: from left to right
-					# y: from bottom to top
-					# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
-					var sprite_offsets_array : Array = atlas_entry_key_value.split(":")[1].split(",")
-					var sprite_offset_x_string : String = sprite_offsets_array[0]
-					var sprite_offset_y_string : String = sprite_offsets_array[1]
-					sprite_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
+				was_offsets_key_seen = true
 
-					# Sprite Original Size
-					var sprite_original_size_x_string : String = sprite_offsets_array[2]
-					var sprite_original_size_y_string : String = sprite_offsets_array[3]
-					sprite_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
+				# Sprite Offset
+				# NOTE The coordinates of the sprite offset based from the original image are measured as follows:
+				# x: from left to right
+				# y: from bottom to top
+				# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
+				var sprite_offsets_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var sprite_offset_x_string : String = sprite_offsets_array[0]
+				var sprite_offset_y_string : String = sprite_offsets_array[1]
+				godot_atlas_texture_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
 
+				# Sprite Original Size
+				var sprite_original_size_x_string : String = sprite_offsets_array[2]
+				var sprite_original_size_y_string : String = sprite_offsets_array[3]
+				godot_atlas_texture_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
 
-	# Need to peek at the next line to check if the rotate entry is there.
-	if not m_file_handle.eof_reached():
-		var current_file_handle_position : int = m_file_handle.get_position()
-		var line_peeked : String = m_file_handle.get_line()
-		m_file_handle.seek(current_file_handle_position)
-		if "rotate" in line_peeked:
-			# NOTE: It's impossible to tell Godot to rotate the sprites.
-			push_error("Godot does not support rotated sprites in atlases. Please fix your LibGDX TexturePacker project to avoid rotating sprites.")
-			return __generate_malformed_atlas_dictionary()
+			"rotate":
+				# NOTE: It's impossible to tell Godot to rotate the AtlasTextures -- need to bubble up an error if this happens.
+				push_error("Found rotated texture in LibGDX TexturePacker Atlas file at \"%s\".\nGodot does not support rotated AtlasTexture resources.\nPlease disable sprites rotation in your LibGDX TexturePacker project and repack the atlas." % [ p_source_file ])
+				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+				return current_line_to_read - p_starting_at_line
 
-	# Construct sprite entry found in the atlas -- this is all the information
-	# that's required to construct a TextureAtlas resource.
-	# The only two extra entries in the dictionary are "success" which
-	# determines if the sprite entry read was successful, and "eof_reached"
-	# that determines whether we are done reading the atlas file but this value
-	# should always be false at this point.
-	# Also, for simplicity, the constructed dictionary is using the legacy LibGDX
-	# Atlas key entries, just so that dictionary keys remain consistent between
-	# the Legacy and New formats when read through this reader.
-	var sprite_entry_dictionary : Dictionary = {
-			"basename" : sprite_basename,
-			"rotate" : rotate,
-			"xy" : sprite_position_vector,
-			"size" : sprite_size_vector,
-			"orig" : sprite_original_size_vector,
-			"offset" : sprite_offset_vector,
-			"index" : sprite_index_string,
-			"success" : extraction_success,
-			"eof_reached" : eof_reached,
+			_:
+				push_error("Found unknown LibGDX TexturePacker Atlas texture entry key : \"%s\" in file \"%s\" at line %d" % [ libgdx_atlas_texture_entry_key, p_source_file, current_line_to_read - 1 ])
+				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+				return current_line_to_read - p_starting_at_line
+
+	if not was_offsets_key_seen:
+		# Need to set the original size vector for the atlas texture which is implicitly given in the new LibGDX TexturePacker Atlas format
+		godot_atlas_texture_original_size_vector = godot_atlas_texture_size_vector
+
+	# Construct LibGDX atlas texture entry dictionary found in the atlas --
+	# this is all the information that's required to construct a Godot
+	# AtlasTexture resource.
+	var atlas_texture_entry_dictionary : Dictionary = {
+			"basename" : godot_atlas_texture_basename,
+			"rotate" : godot_atlas_texture_rotate,
+			"xy" : godot_atlas_texture_position_vector,
+			"size" : godot_atlas_texture_size_vector,
+			"orig" : godot_atlas_texture_original_size_vector,
+			"offset" : godot_atlas_texture_offset_vector,
+			"index" : godot_atlas_texture_index_string,
 			}
 
 	# Debug
-	#print(sprite_entry_dictionary)
-	return sprite_entry_dictionary
+	#print("LibGDX TexturePacker AtlasTexture Dictionary: ", atlas_texture_entry_dictionary)
+
+	# Push the atlas_texture_entry_dictionary into r_packed_texture_dictionary
+	r_packed_texture_dictionary["atlas_textures"].push_back(atlas_texture_entry_dictionary)
+
+	# Debug
+	#print(atlas_texture_entry_dictionary)
+	return current_line_to_read - p_starting_at_line
+
+
+# Returns a Godot Dictionary that represents a parsed LibGDX Texture Packer Atlas wrapped within a parse result dictionary.
+func parse(p_source_file : String) -> Dictionary:
+	# LibGDXTexturePackerAtlasParseResult mimics JSONParseResult but through a Dictionary object instead
+	# NOTE: We don't use a class_name for LibGDXTexturePackerAtlasParseResult class just to avoid declaring global classes unnecessarily since it is known to slow down the Editor on complex projects.
+	var libgdx_texture_packer_atlas_parse_result : Dictionary = {
+			"error" : OK,
+			"result" : {},
+			}
+
+	# Open the LibGDX Texture Packer Atlas file
+	var file_handle : File = File.new()
+	var error : int = file_handle.open(p_source_file, File.READ)
+	if error != OK:
+		# This should not happen
+		push_error("Could not open file at: " + p_source_file)
+		libgdx_texture_packer_atlas_parse_result["error"] = error
+		return libgdx_texture_packer_atlas_parse_result
+
+	# Slurp the LibGDX Texture Packer Atlas file into memory.
+	var libgdx_atlas_pool_string_array : PoolStringArray = file_handle.get_as_text().split("\n")
+	libgdx_atlas_pool_string_array.resize(libgdx_atlas_pool_string_array.size() - 1) # the last entry is an empty string
+
+	# Close the LibGDX Texture Packer Atlas file handle -- it's not needed anymore
+	file_handle.close()
+
+	# Remove the whitespace out of all the lines. Even if the
+	# new format gets pretty-printed we'll be able to process it:
+	for index in range(0, libgdx_atlas_pool_string_array.size()):
+		libgdx_atlas_pool_string_array[index] = m_whitespace_regex.sub(libgdx_atlas_pool_string_array[index], "", true)
+
+	# Debug
+	#print(libgdx_atlas_pool_string_array)
+
+	# Detect whether the LibGDX Texture Packer Atlas file is using the legacy format or the new format:
+	# NOTE: In the legacy format the data structures are more granular.
+	# The new format is more concise and compact. Both formats contain the
+	# same information, just in different places. Since the legacy format
+	# seems easier to read in my opinion, the
+	# parsed_libgdx_texture_packer_atlas_dictionary will contain entries
+	# using the legacy format regardless of the LibGDX Texture Packer Atlas format.
+	# NOTE: Since we are going to parse the LibGDX Texture Packer Atlas line by line, we need
+	# to keep track of the line index we are reading manually
+	var line_index : int = 0
+	if libgdx_atlas_pool_string_array[0] == "":
+		line_index += 1
+		m_detected_atlas_format = m_libgdx_atlas_formats.LEGACY
+	else:
+		m_detected_atlas_format = m_libgdx_atlas_formats.NEW
+
+	# From now on, we'll have to keep track of the parsed LibGDX Texture Packer Atlas
+	var parsed_libgdx_texture_packer_atlas_dictionary : Dictionary = {
+			"path" : p_source_file,
+			"packed_textures" : [],
+			}
+
+	# NOTE: The LibGDX Texture Packer Atlas format supports multi-page texture atlases within the GDX Texture Packer Atlas file (i.e. the .atlas file).
+	# Here's a sample of the legacy format which includes multi-page atlases:
+	#
+	#	atlas1.png
+	#	size: 2048, 2048
+	#	format: RGBA8888
+	#	filter: Nearest, Nearest
+	#	repeat: none
+	#	atlas_texture_1
+	#	  rotate: false
+	#	  xy: 974, 1592
+	#	  size: 484, 316
+	#	  orig: 484, 316
+	#	  offset: 0, 0
+	#	  index: -1
+	#
+	#	atlas2.png
+	#	size: 2048, 1024
+	#	format: RGBA8888
+	#	filter: Nearest, Nearest
+	#	repeat: none
+	#	atlas_texture_1
+	#	  rotate: false
+	#	  xy: 974, 638
+	#	  size: 484, 316
+	#	  orig: 484, 316
+	#	  offset: 0, 0
+	#	  index: -1
+	#
+	# This means that once we parse that file, we'll end up with the following Dictionary structure that represents the GDX Texture Packer Atlas file:
+	# var parsed_libgdx_texture_packer_atlas_dictionary : Dictionary = {
+	#			"gdx_atlas" : source_atlas_res_path,
+	#			"packed_textures" : [
+	#					{
+	#						"filename" : "atlas1.png",
+	#						"settings" : {
+	#								size: 2048, 2048,
+	#								format: RGBA8888,
+	#								filter: Nearest, Nearest,
+	#								repeat: none,
+	#							},
+	#						"atlas_textures" : [
+	#									{
+	#										"atlas_texture" : "atlas_texture_1",
+	#										"rotate" : false,
+	#										"xy" : Vector2,
+	#										"size" : Vector2,
+	#										"orig" : Vector2,
+	#										"offset" : Vector2,
+	#										"index" : Vector2,
+	#									},
+	#									{
+	#										"atlas_texture" : "atlas_texture_2",
+	#										"rotate" : false,
+	#										"xy" : Vector2,
+	#										"size" : Vector2,
+	#										"orig" : Vector2,
+	#										"offset" : Vector2,
+	#										"index" : Vector2,
+	#									}
+	#							]
+	#					},
+	#					{
+	#						"filename" : "atlas1.png",
+	#						"settings" : {
+	#								size: 2048, 2048,
+	#								format: RGBA8888,
+	#								filter: Nearest, Nearest,
+	#								repeat: none,
+	#							},
+	#						"atlas_textures" : [
+	#									{
+	#										"atlas_texture" : "atlas_texture_1",
+	#										"rotate" : false,
+	#										"xy" : Vector2,
+	#										"size" : Vector2,
+	#										"orig" : Vector2,
+	#										"offset" : Vector2,
+	#										"index" : Vector2,
+	#									},
+	#									{
+	#										"atlas_texture" : "atlas_texture_2",
+	#										"rotate" : false,
+	#										"xy" : Vector2,
+	#										"size" : Vector2,
+	#										"orig" : Vector2,
+	#										"offset" : Vector2,
+	#										"index" : Vector2,
+	#									}
+	#							]
+	#					}
+	#				]
+	#			}
+
+	# Let's parse the LibGDX Texture Packer Atlas line by line.
+	# NOTE: Need to track packed texture dictionaries outside of the scope
+	# below because we will need to update this dictionary across the whole
+	# loop once we stumble upon a new packed texture page we need to
+	# process
+	var current_libgdx_packed_texture_dictionary : Dictionary = {
+		"atlas_textures" : [],
+		"settings" : {},
+		}
+
+	while line_index < libgdx_atlas_pool_string_array.size():
+		if m_reader_state == m_atlas_reader_states.READING_TEXTURE_HEADER:
+			# Read the current texture name:
+			current_libgdx_packed_texture_dictionary["filename"] = libgdx_atlas_pool_string_array[line_index]
+			line_index += 1
+
+			# Make sure we able to read the header:
+			var lines_read : int = __read_texture_metadata(libgdx_atlas_pool_string_array, line_index, current_libgdx_packed_texture_dictionary)
+			line_index += lines_read
+
+			# Debug
+			#print(current_libgdx_packed_texture_dictionary)
+
+			# Update reader state
+			m_reader_state = m_atlas_reader_states.READING_ATLAS_TEXTURES
+		if m_reader_state == m_atlas_reader_states.READING_ATLAS_TEXTURES:
+			# Debug
+			#print("Reading atlas textures for packed texture: " + libgdx_atlas_pool_string_array[line_index])
+
+			# Store all the atlas entries in an array for post processing later
+			while line_index < (libgdx_atlas_pool_string_array.size() - 1) and libgdx_atlas_pool_string_array[line_index] != "":
+				# Extract atlas entry
+				var lines_read : int = __get_next_atlas_texture_entry(libgdx_atlas_pool_string_array, p_source_file, line_index, current_libgdx_packed_texture_dictionary)
+
+				# Check if there were any errors getting the next texture entry.
+				if "error" in current_libgdx_packed_texture_dictionary: # something bad happened
+					# Bubble up the error to the parsed_libgdx_texture_packer_atlas_dictionary
+					parsed_libgdx_texture_packer_atlas_dictionary["error"] = current_libgdx_packed_texture_dictionary["error"]
+					# Remove the key from the packed_texture_dictionary
+					var _success : int = current_libgdx_packed_texture_dictionary.erase("error")
+					# Push the error up the stack
+					return parsed_libgdx_texture_packer_atlas_dictionary
+
+				# Update the line_index with the amount of lines read
+				line_index += lines_read
+
+			if line_index == libgdx_atlas_pool_string_array.size():
+				# We are done. This was a successful read
+
+				# Save the current packed texture dictionary -- we are done reading it
+				parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"].push_back(current_libgdx_packed_texture_dictionary)
+
+				# And exit out of the loop
+				break
+
+			# If we stumble upon a new line while reading the current atlas textures, this means we are about to start reading data about a new LibGDX packed texture -- including its settings and its atlas textures.
+			# Toggle the reader state back to READING_TEXTURE_HEADER to process the data accordingly
+			if libgdx_atlas_pool_string_array[line_index] == "":
+				# Save the current packed texture dictionary -- we are done reading it
+				parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"].push_back(current_libgdx_packed_texture_dictionary)
+
+				# Create a new dictionary and attach it to the current_libgdx_packed_texture_dictionary since we are about to read a new LibGDX Texture Packer Atlas page
+				current_libgdx_packed_texture_dictionary = {
+					"atlas_textures" : [],
+					"settings" : {},
+					}
+
+				# Update the current line index -- we've already processed it
+				line_index += 1
+
+				# And finally update the current reader state so we start processing the new header properly.
+				m_reader_state = m_atlas_reader_states.READING_TEXTURE_HEADER
+
+	# Debug
+	#print("Parsed LibGDX Texture Packer Atlas dictionary: ", parsed_libgdx_texture_packer_atlas_dictionary)
+
+	# Attach the parsed_libgdx_texture_packer_atlas_dictionary to the parse result:
+	libgdx_texture_packer_atlas_parse_result["result"] = parsed_libgdx_texture_packer_atlas_dictionary
+
+	# And we are done
+	return libgdx_texture_packer_atlas_parse_result

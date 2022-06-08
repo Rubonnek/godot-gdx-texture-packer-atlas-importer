@@ -11,17 +11,18 @@ Then enable the plugin on the Project Settings.
 
 ## Usage
 
-Pack the individual sprites using the [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) and copy or move the exported spritesheet (`.png`) along with the associated atlas information file (`.atlas`) to the same folder within your Godot project.
+Pack the individual sprites using the [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) and copy or move the exported spritesheet(s) (`.png`) along with the associated atlas information file (`.atlas`) to the same folder within your Godot project.
 
-This plugin will generate a `<spritesheet_filename>.sprites` folder within which you'll find the each `AtlasTexture` associated with the spritesheet.
+This plugin will generate a `<spritesheet_filename>.atlas_textures` folder within which you'll find the each `AtlasTexture` associated with the spritesheet(s).
 
 ## Benefits
 
 The main benefits to use this tool are:
 
-1. Packing texture will no longer require a restart from Godot.
+1. Packing texture will no longer require you to restart Godot.
 2. [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) itself provides an interface in which you can manage all your texture atlases separately which is great for bigger projects.
+3. And packing your textures will increase performance since by doing so Godot will be able to minimize the number of screen draw calls which will increase your frames per second.
 
 ## License
 
-[MIT License](LICENSE). Copyright (c) 2021 Wilson Enrique Alvarez Torres.
+[MIT License](LICENSE). Copyright (c) 2021-2022 Wilson E. Alvarez.
