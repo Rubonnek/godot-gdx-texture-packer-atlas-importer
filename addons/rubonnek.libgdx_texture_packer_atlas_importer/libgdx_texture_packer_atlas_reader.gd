@@ -136,6 +136,18 @@ func __get_next_atlas_texture_entry(p_libgdx_atlas_pool_string_array : PoolStrin
 		r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
 		return 0
 
+# In order to process the legacy LibGDX TexturePacker Atlas format, we need to know what keys we expect to read under each atlas texture.
+# This constant is only meant to be used by the function: __get_next_libgdx_atlas_texture_entry_in_new_atlas_format
+const m_expected_legacy_libgdx_texture_packer_atlas_format_keys : Array = [
+		"rotate",
+		"xy",
+		"size",
+		"split",
+		"pad",
+		"orig",
+		"offset",
+		"index",
+	]
 
 # Returns the number of lines read from the atlas texture
 func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas_pool_string_array : PoolStringArray, p_source_file : String, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
@@ -145,45 +157,59 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 	# Grab the sprite basename -- there's a chance this could return empty
 	# because we have reached the end of file:
 	var current_line_to_read : int = p_starting_at_line
-	var godot_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
+	var libgdx_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
 	current_line_to_read += 1
 
 	# In-scope variables to store the values we are going to return in
 	# Godot format where possible. Otherwise we'll use raw LibGDX format.
-	var godot_atlas_texture_rotate : bool = false
-	var godot_atlas_texture_position_vector : Vector2
-	var godot_atlas_texture_size_vector : Vector2
-	var godot_atlas_texture_original_size_vector : Vector2
-	var godot_atlas_texture_offset_vector : Vector2
-	var godot_atlas_texture_index_string : String
+	var libgdx_atlas_texture_rotate : bool = false
+	var libgdx_atlas_texture_position_vector : Vector2
+	var libgdx_atlas_texture_size_vector : Vector2
+	var libgdx_atlas_texture_original_size_vector : Vector2
+	var libgdx_atlas_texture_offset_vector : Vector2
+	var libgdx_atlas_texture_index_string : String
 
-	# Start looping over the key-value pairs of the atlas
-	var libgdx_atlas_texture_entry_format_lines_to_read : int = 6
+	# LibGDX TexturePacker atlases also support defining nine patch rects,
+	# for which we can also generate NinePatchRect nodes in Godot.
+	# These entries only show up when these objects are defined.
+	var libgdx_nine_patch_rect_patch_margin_rect2 : Rect2
+	var was_split_key_seen : bool = false
+	var libgdx_nine_patch_rect_rect_region_rect2 : Rect2
+	var was_pad_key_seen : bool = false
+
+	# Start looping over the key-value pairs of the atlas -- we need to
+	# make sure we read allpossible entries.
+	var libgdx_atlas_texture_entry_format_lines_to_read : int = 8
 	# NOTE: The GDX TexturePacker GUI tool at: https://github.com/crashinvaders/gdx-texture-packer-gui
-	# Outputs each LibGDX atlas texture entry as follows, in the same order:
-	#	godot_atlas_texture_basename
+	# Outputs each LibGDX atlas texture entry as follows, in the same order when all entries are present:
+	#	libgdx_atlas_texture_basename
 	#	  rotate: false
 	#	  xy: 2, 2
 	#	  size: 27, 31
+	#	  split: 1, 2, 4, 3
+	#	  pad: 0, 0, 0, 0
 	#	  orig: 32, 32
 	#	  offset: 3, 1
 	#	  index: 3
-	# And we expect to see these 6 entries always. If we don't, show an error
 	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
-		# Check if we have reached the end of file -- the file is malformed at this
-		# stage if we reach eof. This should not happen.
+		# Check if we have reached the end of file -- if so we are done reading the atlas
 		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
-			push_error("Malformed LibGDX TexturePacker atlas. Didn't expect to reach end of atlas \"%s\" at line %d." % [ p_source_file, current_line_to_read - 1])
-			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
-			return current_line_to_read - p_starting_at_line
+			break
 
 		# Grab atlas key-value pair
 		var libgdx_atlas_texture_entry_key_value_pair_array : Array = p_libgdx_atlas_pool_string_array[libgdx_texture_packer_atlas_texture_entry_line].split(":")
-		current_line_to_read += 1
+
+		# Check that the key we got is supported
 		var libgdx_atlas_texture_entry_key : String = libgdx_atlas_texture_entry_key_value_pair_array[0]
+		if not libgdx_atlas_texture_entry_key in m_expected_legacy_libgdx_texture_packer_atlas_format_keys:
+			# The key is not supported -- we are at the beginning of the next either an atlas entry or a new atlas page.
+			break
+
+		# It's a known key.
+		current_line_to_read += 1
 		var libgdx_atlas_texture_entry_value : String = libgdx_atlas_texture_entry_key_value_pair_array[1]
 
-		# Process atlas entry
+		# Process texture atlas key-value entry
 		match libgdx_atlas_texture_entry_key:
 			"rotate":
 				# Process Rotate entry -- if it's not false, we can't process this LibGDX TexturePacker Atlas in Godot
@@ -194,54 +220,88 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 					return current_line_to_read - p_starting_at_line
 
 			"xy":
-				# Process Sprite Position
+				# Process LibGDX AtlasTexture Position
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-				var sprite_position_on_atlas_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_position_x_string : String = sprite_position_on_atlas_array[0]
-				var sprite_position_y_string : String = sprite_position_on_atlas_array[1]
-				godot_atlas_texture_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
+				var libgdx_atlas_texture_position_on_atlas_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_position_x_string : String = libgdx_atlas_texture_position_on_atlas_array[0]
+				var libgdx_atlas_texture_position_y_string : String = libgdx_atlas_texture_position_on_atlas_array[1]
+				libgdx_atlas_texture_position_vector = Vector2(int(libgdx_atlas_texture_position_x_string), int(libgdx_atlas_texture_position_y_string))
 
 			"size":
-				# Process Sprite Size
+				# Process LibGDX AtlasTexture Size
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
 				# Also, this sprite size may differ from the original since
 				# transparent borders may be trimmed to save space.
-				var sprite_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_size_x_string : String = sprite_size_array[0]
-				var sprite_size_y_string : String = sprite_size_array[1]
-				godot_atlas_texture_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
+				var libgdx_atlas_texture_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_size_x_string : String = libgdx_atlas_texture_size_array[0]
+				var libgdx_atlas_texture_size_y_string : String = libgdx_atlas_texture_size_array[1]
+				libgdx_atlas_texture_size_vector = Vector2(int(libgdx_atlas_texture_size_x_string), int(libgdx_atlas_texture_size_y_string))
+
+			"split":
+				# Process LibGDX NinePatchRect Patch Margin
+				# In the following entry:
+				#	split: 1, 2, 4, 3
+				# the numbers represent the following:
+				# 	1 represents the nine patch rect margin from the left
+				# 	2 represents the nine patch rect margin from the right
+				# 	4 represents the nine patch rect margin from the top
+				# 	3 represents the nine patch rect margin from the bottom
+				was_split_key_seen = true
+				var libgdx_nine_patch_rect_patch_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_patch_margin_left : int = int(libgdx_nine_patch_rect_patch_margin_array[0])
+				var libgdx_patch_margin_right : int = int(libgdx_nine_patch_rect_patch_margin_array[1])
+				var libgdx_patch_margin_top : int = int(libgdx_nine_patch_rect_patch_margin_array[2])
+				var libgdx_patch_margin_bottom : int = int(libgdx_nine_patch_rect_patch_margin_array[3])
+				libgdx_nine_patch_rect_patch_margin_rect2 = Rect2(libgdx_patch_margin_left, libgdx_patch_margin_right, libgdx_patch_margin_top, libgdx_patch_margin_bottom)
+
+			"pad":
+				# Process LibGDX NinePatchRect Content Margin
+				# In entry:
+				#	pad: 1, 2, 4, 3
+				# the numbers represent the following:
+				# 	1 represents the content margin from the left
+				# 	2 represents the content margin from the right
+				# 	4 represents the content margin from the top
+				# 	3 represents the content margin from the bottom
+				was_pad_key_seen = true
+				var libgdx_nine_patch_content_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_rect_region_left : int = int(libgdx_nine_patch_content_margin_array[0])
+				var libgdx_rect_region_right : int = int(libgdx_nine_patch_content_margin_array[1])
+				var libgdx_rect_region_top : int = int(libgdx_nine_patch_content_margin_array[2])
+				var libgdx_rect_region_bottom : int = int(libgdx_nine_patch_content_margin_array[3])
+				libgdx_nine_patch_rect_rect_region_rect2 = Rect2(libgdx_rect_region_left, libgdx_rect_region_right, libgdx_rect_region_top, libgdx_rect_region_bottom)
 
 			"orig":
-				# Sprite Original Size
-				var sprite_original_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_original_size_x_string : String = sprite_original_size_array[0]
-				var sprite_original_size_y_string : String = sprite_original_size_array[1]
-				godot_atlas_texture_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
+				# LibGDX AtlasTexture Original Size
+				var libgdx_atlas_texture_original_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_original_size_x_string : String = libgdx_atlas_texture_original_size_array[0]
+				var libgdx_atlas_texture_original_size_y_string : String = libgdx_atlas_texture_original_size_array[1]
+				libgdx_atlas_texture_original_size_vector = Vector2(int(libgdx_atlas_texture_original_size_x_string), int(libgdx_atlas_texture_original_size_y_string))
 
 			"offset":
-				# Sprite Offset
+				# LibGDX AtlasTexture Offset
 				# NOTE The coordinates of the sprite offset based from the original image are measured as follows:
 				# x: from left to right
 				# y: from bottom to top
 				# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
-				var sprite_offset_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_offset_x_string : String = sprite_offset_array[0]
-				var sprite_offset_y_string : String = sprite_offset_array[1]
-				godot_atlas_texture_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
+				var libgdx_atlas_texture_offset_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_offset_x_string : String = libgdx_atlas_texture_offset_array[0]
+				var libgdx_atlas_texture_offset_y_string : String = libgdx_atlas_texture_offset_array[1]
+				libgdx_atlas_texture_offset_vector = Vector2(int(libgdx_atlas_texture_offset_x_string), int(libgdx_atlas_texture_offset_y_string))
 
 			"index":
-				# Sprite Index
+				# LibGDX AtlasTexture Index
 				# NOTE: When a set of sprite filenames such as "run_0.png",
 				# "run_1.png", "run_2.png" are included in an atlas, the sprite frame
 				# numbers 0, 1, and 2 respectively ends up as the index entry in the
 				# atlas file.
-				godot_atlas_texture_index_string = libgdx_atlas_texture_entry_value
+				libgdx_atlas_texture_index_string = libgdx_atlas_texture_entry_value
 
 			_:
 				push_error("Found unknown LibGDX TexturePacker Atlas texture entry key : \"%s\" in file \"%s\" at line %d" % [ libgdx_atlas_texture_entry_key, p_source_file, current_line_to_read - 1 ])
@@ -252,14 +312,32 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 	# this is all the information that's required to construct a Godot
 	# AtlasTexture resource.
 	var atlas_texture_entry_dictionary : Dictionary = {
-			"basename" : godot_atlas_texture_basename,
-			"rotate" : godot_atlas_texture_rotate,
-			"xy" : godot_atlas_texture_position_vector,
-			"size" : godot_atlas_texture_size_vector,
-			"orig" : godot_atlas_texture_original_size_vector,
-			"offset" : godot_atlas_texture_offset_vector,
-			"index" : godot_atlas_texture_index_string,
+			"basename" : libgdx_atlas_texture_basename,
+			"rotate" : libgdx_atlas_texture_rotate,
+			"xy" : libgdx_atlas_texture_position_vector,
+			"size" : libgdx_atlas_texture_size_vector,
+			"orig" : libgdx_atlas_texture_original_size_vector,
+			"offset" : libgdx_atlas_texture_offset_vector,
+			"index" : libgdx_atlas_texture_index_string,
 			}
+
+	# Include the Godot NinePatchRect data if any was defined for this AtlasTexture
+	if was_pad_key_seen or was_split_key_seen:
+		if was_split_key_seen and was_pad_key_seen:
+			atlas_texture_entry_dictionary["split"] = libgdx_nine_patch_rect_patch_margin_rect2
+			atlas_texture_entry_dictionary["pad"] = libgdx_nine_patch_rect_rect_region_rect2
+		else:
+			var which_key_was_seen : String = ""
+			if was_split_key_seen:
+				which_key_was_seen = "split"
+			else:
+				which_key_was_seen = "pad"
+			var error_message : String = "Malformed LibGDX TexturePacker Atlas\n"
+			error_message += "Expected to see both \"split\" and \"pad\" entries defined in: %s\n" % [ p_source_file ]
+			error_message += "But only saw the \"%s\" key at around line %d" % [ which_key_was_seen, current_line_to_read - 1]
+			push_error(error_message)
+			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+			return current_line_to_read - p_starting_at_line
 
 	# Push the atlas_texture_entry_dictionary into r_packed_texture_dictionary
 	r_packed_texture_dictionary["atlas_textures"].push_back(atlas_texture_entry_dictionary)
@@ -272,11 +350,13 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 # In order to process the new LibGDX TexturePacker Atlas format, we need to know what keys we expect to read under each atlas texture.
 # This constant is only meant to be used by the function: __get_next_libgdx_atlas_texture_entry_in_new_atlas_format
 const m_expected_new_libgdx_texture_packer_atlas_format_keys : Array = [
-			"index",
-			"bounds",
-			"offsets",
-			"rotate",
-			]
+		"index",
+		"bounds",
+		"split",
+		"pad",
+		"offsets",
+		"rotate",
+	]
 
 
 # Returns the number of lines it read from the atlas texture
@@ -285,13 +365,15 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 	assert(m_reader_state == m_atlas_reader_states.READING_ATLAS_TEXTURES)
 
 	# NOTE: The GDX TexturePacker GUI tool at: https://github.com/crashinvaders/gdx-texture-packer-gui
-	# Outputs each atlas sprite entry as follows, in the same order:
+	# Outputs each atlas sprite entry as follows, in the same order assuming all entries are present:
 	#	libgdx_atlas_texture_basename
 	#		index: 3
 	#		bounds: 2, 2, 27, 31
+	#		split:1,2,4,3
+	#		pad:1,2,4,3
 	#		offsets: 3, 1, 32, 32
 	#		rotate: true
-	# However, the new format only shows most entries only when needed. The only constant is the atlas texture bounds which is required.
+	# Of the atlas texture keys above, the only constant entry is the atlas texture bounds which is required.
 
 	# The pretty-print is the version shown above. The non-pretty-print version is the exact same except all whitespace is eliminated on each row.
 
@@ -302,23 +384,31 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 	# Grab the sprite basename -- there's a chance this could return empty
 	# because we have reached the end of file:
 	var current_line_to_read : int = p_starting_at_line
-	var godot_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
+	var libgdx_atlas_texture_basename : String = p_libgdx_atlas_pool_string_array[current_line_to_read]
 	current_line_to_read += 1
 
 	# Debug
-	#print("Processing LibGDX texture: ", godot_atlas_texture_basename)
+	#print("Processing LibGDX texture: ", libgdx_atlas_texture_basename)
 
 	# In-scope variables to store the values we are going to return in
 	# Godot format where possible. Otherwise we'll use raw LibGDX format.
-	var godot_atlas_texture_rotate : bool = false
-	var godot_atlas_texture_position_vector : Vector2
-	var godot_atlas_texture_size_vector : Vector2
-	var godot_atlas_texture_original_size_vector : Vector2
-	var godot_atlas_texture_offset_vector : Vector2
-	var godot_atlas_texture_index_string : String = "-1" # this is the default in the legacy format and it means there are no other atlas textures with similar names
+	var libgdx_atlas_texture_rotate : bool = false
+	var libgdx_atlas_texture_position_vector : Vector2
+	var libgdx_atlas_texture_size_vector : Vector2
+	var libgdx_atlas_texture_original_size_vector : Vector2
+	var libgdx_atlas_texture_offset_vector : Vector2
+	var libgdx_atlas_texture_index_string : String = "-1" # this is the default in the legacy format and it means there are no other atlas textures with similar names
+
+	# LibGDX TexturePacker atlases also support defining nine patch rects,
+	# for which we can also generate NinePatchRect nodes in Godot.
+	# These entries only show up when these objects are defined.
+	var libgdx_nine_patch_rect_patch_margin_rect2 : Rect2
+	var was_split_key_seen : bool = false
+	var libgdx_nine_patch_rect_rect_region_rect2 : Rect2
+	var was_pad_key_seen : bool = false
 
 	# Start looping over the key-value pairs of the atlas
-	var libgdx_atlas_texture_entry_format_lines_to_read : int = 4
+	var libgdx_atlas_texture_entry_format_lines_to_read : int = 6
 	# NOTE: We use the following PoolStringArray and Dictionary for sanity checking later on
 	# NOTE: The was_bounds_key_seen variable below is only used to make
 	# sure we've at least read what we need from the new LibGDX
@@ -331,12 +421,13 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 	# within the new format, then that means the original texture size is
 	# the same as what appears in the 'bounds' key.
 	var was_offsets_key_seen : bool = false
+
 	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
 		# If we reach eof, we've reached the end of the file and that's completely fine.
 		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
 			if not was_bounds_key_seen:
 				# We didn't read the necessary key -- we got to EOF before we could read it. This means this LibGDX atlas file is malformed.
-				push_error("Malformed LibGDX atlas found at \"%s\".\nReached end of file before the 'bounds' key was read for the atlas texture with basename \"%s\"\n" % [ p_source_file, godot_atlas_texture_basename ])
+				push_error("Malformed LibGDX atlas found at \"%s\".\nReached end of file before the 'bounds' key was read for the atlas texture with basename \"%s\"\n" % [ p_source_file, libgdx_atlas_texture_basename ])
 				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
 				return current_line_to_read - p_starting_at_line
 			break
@@ -351,7 +442,7 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 				break
 			else:
 				# We didn't read the necessary key -- this LibGDX atlas file is malformed.
-				push_error("Malformed LibGDX atlas found at \"%s\".\nCould not find 'bounds' key around line %d for atlas texture with basename \"%s\"" % [ p_source_file, current_line_to_read, godot_atlas_texture_basename ])
+				push_error("Malformed LibGDX atlas found at \"%s\".\nCould not find 'bounds' key around line %d for atlas texture with basename \"%s\"" % [ p_source_file, current_line_to_read, libgdx_atlas_texture_basename ])
 				r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
 				return current_line_to_read - p_starting_at_line
 
@@ -364,37 +455,71 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 		# Process atlas entry
 		match libgdx_atlas_texture_entry_key:
 			"index":
-				# Sprite Index
+				# LibGDX AtlasTexture Index
 				# NOTE: When a set of sprite filenames such as "run_0.png",
 				# "run_1.png", "run_2.png" are included in an atlas, the sprite frame
 				# numbers 0, 1, and 2 respectively ends up as the index entry in the
 				# atlas file.
-				godot_atlas_texture_index_string = libgdx_atlas_texture_entry_value
+				libgdx_atlas_texture_index_string = libgdx_atlas_texture_entry_value
 
 			"bounds":
-				# The bounds include the Sprite Position and the Sprite Size
+				# The bounds include the LibGDX AtlasTexture Position and the LibGDX AtlasTexture Size
 				was_bounds_key_seen = true
 
-				# Sprite Position
+				# LibGDX AtlasTexture Position
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-				var sprite_bounds_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_position_x_string : String = sprite_bounds_array[0]
-				var sprite_position_y_string : String = sprite_bounds_array[1]
-				godot_atlas_texture_position_vector = Vector2(int(sprite_position_x_string), int(sprite_position_y_string))
+				var libgdx_atlas_texture_bounds_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_position_x_string : String = libgdx_atlas_texture_bounds_array[0]
+				var libgdx_atlas_texture_position_y_string : String = libgdx_atlas_texture_bounds_array[1]
+				libgdx_atlas_texture_position_vector = Vector2(int(libgdx_atlas_texture_position_x_string), int(libgdx_atlas_texture_position_y_string))
 
-				# Sprite Size
+				# LibGDX AtlasTexture Size
 				# NOTE The coordinates of sprite position on atlas are measured as follows:
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
 				# Also, this sprite size may differ from the original since
 				# transparent borders may be trimmed to save space.
-				var sprite_size_x_string : String = sprite_bounds_array[2]
-				var sprite_size_y_string : String = sprite_bounds_array[3]
-				godot_atlas_texture_size_vector = Vector2(int(sprite_size_x_string), int(sprite_size_y_string))
+				var libgdx_atlas_texture_size_x_string : String = libgdx_atlas_texture_bounds_array[2]
+				var libgdx_atlas_texture_size_y_string : String = libgdx_atlas_texture_bounds_array[3]
+				libgdx_atlas_texture_size_vector = Vector2(int(libgdx_atlas_texture_size_x_string), int(libgdx_atlas_texture_size_y_string))
+
+			"split":
+				# Process LibGDX NinePatchRect Patch Margin
+				# On the following LibGDX Texture Packer atlas entry:
+				#	split: 1, 2, 4, 3
+				# the numbers represent the following:
+				# 	1 represents the nine patch rect margin from the left
+				# 	2 represents the nine patch rect margin from the right
+				# 	4 represents the nine patch rect margin from the top
+				# 	3 represents the nine patch rect margin from the bottom
+				was_split_key_seen = true
+				var libgdx_nine_patch_rect_patch_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_patch_margin_left : int = int(libgdx_nine_patch_rect_patch_margin_array[0])
+				var libgdx_patch_margin_right : int = int(libgdx_nine_patch_rect_patch_margin_array[1])
+				var libgdx_patch_margin_top : int = int(libgdx_nine_patch_rect_patch_margin_array[2])
+				var libgdx_patch_margin_bottom : int = int(libgdx_nine_patch_rect_patch_margin_array[3])
+				libgdx_nine_patch_rect_patch_margin_rect2 = Rect2(libgdx_patch_margin_left, libgdx_patch_margin_right, libgdx_patch_margin_top, libgdx_patch_margin_bottom)
+
+			"pad":
+				# Process LibGDX NinePatchRect Content Margin
+				# On the following LibGDX Texture Packer atlas entry:
+				#	pad: 1, 2, 4, 3
+				# the numbers represent the following:
+				# 	1 represents the content margin from the left
+				# 	2 represents the content margin from the right
+				# 	4 represents the content margin from the top
+				# 	3 represents the content margin from the bottom
+				was_pad_key_seen = true
+				var libgdx_nine_patch_content_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_rect_region_left : int = int(libgdx_nine_patch_content_margin_array[0])
+				var libgdx_rect_region_right : int = int(libgdx_nine_patch_content_margin_array[1])
+				var libgdx_rect_region_top : int = int(libgdx_nine_patch_content_margin_array[2])
+				var libgdx_rect_region_bottom : int = int(libgdx_nine_patch_content_margin_array[3])
+				libgdx_nine_patch_rect_rect_region_rect2 = Rect2(libgdx_rect_region_left, libgdx_rect_region_right, libgdx_rect_region_top, libgdx_rect_region_bottom)
 
 			"offsets":
 				# The "offsets" entry in the new format really includes two
@@ -403,20 +528,20 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 				#	2) the sprite original size.
 				was_offsets_key_seen = true
 
-				# Sprite Offset
+				# LibGDX AtlasTexture Offset
 				# NOTE The coordinates of the sprite offset based from the original image are measured as follows:
 				# x: from left to right
 				# y: from bottom to top
 				# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
-				var sprite_offsets_array : Array = libgdx_atlas_texture_entry_value.split(",")
-				var sprite_offset_x_string : String = sprite_offsets_array[0]
-				var sprite_offset_y_string : String = sprite_offsets_array[1]
-				godot_atlas_texture_offset_vector = Vector2(int(sprite_offset_x_string), int(sprite_offset_y_string))
+				var libgdx_atlas_texture_offsets_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_offset_x_string : String = libgdx_atlas_texture_offsets_array[0]
+				var libgdx_atlas_texture_offset_y_string : String = libgdx_atlas_texture_offsets_array[1]
+				libgdx_atlas_texture_offset_vector = Vector2(int(libgdx_atlas_texture_offset_x_string), int(libgdx_atlas_texture_offset_y_string))
 
-				# Sprite Original Size
-				var sprite_original_size_x_string : String = sprite_offsets_array[2]
-				var sprite_original_size_y_string : String = sprite_offsets_array[3]
-				godot_atlas_texture_original_size_vector = Vector2(int(sprite_original_size_x_string), int(sprite_original_size_y_string))
+				# LibGDX AtlasTexture Original Size
+				var libgdx_atlas_texture_original_size_x_string : String = libgdx_atlas_texture_offsets_array[2]
+				var libgdx_atlas_texture_original_size_y_string : String = libgdx_atlas_texture_offsets_array[3]
+				libgdx_atlas_texture_original_size_vector = Vector2(int(libgdx_atlas_texture_original_size_x_string), int(libgdx_atlas_texture_original_size_y_string))
 
 			"rotate":
 				# NOTE: It's impossible to tell Godot to rotate the AtlasTextures -- need to bubble up an error if this happens.
@@ -431,20 +556,39 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 
 	if not was_offsets_key_seen:
 		# Need to set the original size vector for the atlas texture which is implicitly given in the new LibGDX TexturePacker Atlas format
-		godot_atlas_texture_original_size_vector = godot_atlas_texture_size_vector
+		libgdx_atlas_texture_original_size_vector = libgdx_atlas_texture_size_vector
 
 	# Construct LibGDX atlas texture entry dictionary found in the atlas --
 	# this is all the information that's required to construct a Godot
 	# AtlasTexture resource.
 	var atlas_texture_entry_dictionary : Dictionary = {
-			"basename" : godot_atlas_texture_basename,
-			"rotate" : godot_atlas_texture_rotate,
-			"xy" : godot_atlas_texture_position_vector,
-			"size" : godot_atlas_texture_size_vector,
-			"orig" : godot_atlas_texture_original_size_vector,
-			"offset" : godot_atlas_texture_offset_vector,
-			"index" : godot_atlas_texture_index_string,
+			"basename" : libgdx_atlas_texture_basename,
+			"rotate" : libgdx_atlas_texture_rotate,
+			"xy" : libgdx_atlas_texture_position_vector,
+			"size" : libgdx_atlas_texture_size_vector,
+			"orig" : libgdx_atlas_texture_original_size_vector,
+			"offset" : libgdx_atlas_texture_offset_vector,
+			"index" : libgdx_atlas_texture_index_string,
 			}
+
+
+	# Include the Godot NinePatchRect data if any was defined for this AtlasTexture
+	if was_pad_key_seen or was_split_key_seen:
+		if was_split_key_seen and was_pad_key_seen:
+			atlas_texture_entry_dictionary["split"] = libgdx_nine_patch_rect_patch_margin_rect2
+			atlas_texture_entry_dictionary["pad"] = libgdx_nine_patch_rect_rect_region_rect2
+		else:
+			var which_key_was_seen : String = ""
+			if was_split_key_seen:
+				which_key_was_seen = "split"
+			else:
+				which_key_was_seen = "pad"
+			var error_message : String = "Malformed LibGDX TexturePacker Atlas\n"
+			error_message += "Expected to see both \"split\" and \"pad\" entries defined in: %s\n" % [ p_source_file ]
+			error_message += "But only saw the \"%s\" key at around line %d" % [ which_key_was_seen, current_line_to_read - 1]
+			push_error(error_message)
+			r_packed_texture_dictionary["error"] = ERR_PARSE_ERROR
+			return current_line_to_read - p_starting_at_line
 
 	# Debug
 	#print("LibGDX TexturePacker AtlasTexture Dictionary: ", atlas_texture_entry_dictionary)
@@ -520,10 +664,12 @@ func parse(p_source_file : String) -> Dictionary:
 	#	format: RGBA8888
 	#	filter: Nearest, Nearest
 	#	repeat: none
-	#	atlas_texture_1
+	#	atlas_texture_1_with_defined_nine_patch
 	#	  rotate: false
 	#	  xy: 974, 1592
 	#	  size: 484, 316
+	#	  split: 0, 0, 0, 0
+	#	  pad: 0, 0, 0, 0
 	#	  orig: 484, 316
 	#	  offset: 0, 0
 	#	  index: -1
@@ -559,6 +705,8 @@ func parse(p_source_file : String) -> Dictionary:
 	#										"rotate" : false,
 	#										"xy" : Vector2,
 	#										"size" : Vector2,
+	#										"split" : Rect2,
+	#										"pad" : Rect2,
 	#										"orig" : Vector2,
 	#										"offset" : Vector2,
 	#										"index" : Vector2,

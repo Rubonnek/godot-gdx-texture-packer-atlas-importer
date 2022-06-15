@@ -13,7 +13,7 @@ Then enable the plugin on the Project Settings.
 
 Pack the individual sprites using the [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) and copy or move the exported spritesheet(s) (`.png`) along with the associated atlas information file (`.atlas`) to the same folder within your Godot project.
 
-This plugin will generate a `<atlas_filename>.atlas_textures` folder within which you'll find the each `AtlasTexture` associated with the spritesheet(s).
+This plugin will generate a `<atlas_filename>.atlas_textures` folder within which you'll find the each `AtlasTexture` associated with the spritesheet(s), as well as a `<atlas_filename>.nine_patch_rects` folder within which you'll find the each `NinePatchRect` node associated with the spritesheet(s).
 
 ## Benefits
 
