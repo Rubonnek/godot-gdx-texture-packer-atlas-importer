@@ -142,9 +142,10 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	# Debug
 	#if directory.dir_exists(atlas_texture_resources_directory):
 	#	__remove_directory_recursively(atlas_texture_resources_directory)
-	if directory.make_dir(atlas_texture_resources_directory) != OK:
-		push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ atlas_texture_resources_directory ])
-		return ERR_CANT_CREATE
+	if not directory.dir_exists(atlas_texture_resources_directory):
+		if directory.make_dir(atlas_texture_resources_directory) != OK:
+			push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ atlas_texture_resources_directory ])
+			return ERR_CANT_CREATE
 
 	# The LibGDX TexturePacker Atlas format also supports describing nine
 	# patch rectangles which directly translate to a NinePatchRect node in
@@ -159,9 +160,10 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 			if "split" in libgdx_atlas_texture_dictionary:
 				is_a_nine_patch_rect_defined = true
 	if is_a_nine_patch_rect_defined:
-		if directory.make_dir(nine_patch_rect_scenes_directory) != OK:
-			push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ nine_patch_rect_scenes_directory ])
-			return ERR_CANT_CREATE
+		if not directory.dir_exists(nine_patch_rect_scenes_directory):
+			if directory.make_dir(nine_patch_rect_scenes_directory) != OK:
+				push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ nine_patch_rect_scenes_directory ])
+				return ERR_CANT_CREATE
 
 	# For each packed texture found within the GDX Atlas
 	var libgdx_atlas_base_directory : String = libgdx_atlas_path.get_base_dir()
