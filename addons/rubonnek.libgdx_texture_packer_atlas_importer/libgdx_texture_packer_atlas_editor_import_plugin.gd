@@ -273,42 +273,65 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 				# Set the AtlasTexture on the NinePatchRect
 				godot_nine_patch_rect.set_texture(atlas_texture_resource)
 
+
 				# Set the new AtlasTexture Content Margin
 				var libgdx_nine_patch_content_margin_rect2 : Rect2 = libgdx_atlas_texture_dictionary["pad"]
-				var libgdx_left_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.x)
-				var libgdx_right_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.y)
-				var libgdx_bottom_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.y)
-				var libgdx_top_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.x)
-				# Debug
-				#print("Left content margin: ", libgdx_left_margin_padding)
-				#print("Right content margin: ", libgdx_right_margin_padding)
-				#print("Bottom content margin: ", libgdx_bottom_margin_padding)
-				#print("Top content margin: ", libgdx_top_margin_padding)
-				var godot_content_position_offset : Vector2 = Vector2(libgdx_left_margin_padding, libgdx_top_margin_padding)
-				var godot_content_size : Vector2 = Vector2(libgdx_texture_size.x - (libgdx_left_margin_padding + libgdx_right_margin_padding), libgdx_texture_size.y - (libgdx_top_margin_padding + libgdx_bottom_margin_padding))
-				godot_nine_patch_rect.set_region_rect(Rect2(godot_content_position_offset, godot_content_size))
+				var libgdx_left_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.x)
+				var libgdx_right_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.y)
+				var libgdx_bottom_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.y)
+				var libgdx_top_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.x)
 
 				# Debug
-				#print("NinePatchRect AtlasTexture content region raw: ", libgdx_nine_patch_content_margin_rect2)
+				#print("Name: ", atlas_texture_resource_name)
+				#print("LibGDX Left content margin padding: ", libgdx_left_content_margin_padding)
+				#print("LibGDX Right content margin padding: ", libgdx_right_content_margin_padding)
+				#print("LibGDX Bottom content margin padding: ", libgdx_bottom_content_margin_padding)
+				#print("LibGDX Top content margin padding: ", libgdx_top_content_margin_padding)
+
+				var godot_content_position_offset : Vector2 = Vector2(libgdx_left_content_margin_padding, libgdx_top_content_margin_padding)
+				var godot_content_size : Vector2 = Vector2(libgdx_texture_size.x - (libgdx_left_content_margin_padding + libgdx_right_content_margin_padding), libgdx_texture_size.y - (libgdx_top_content_margin_padding + libgdx_bottom_content_margin_padding))
+				godot_nine_patch_rect.set_region_rect(Rect2(godot_content_position_offset, godot_content_size))
 
 				# Set the size of the NinePatchRect node to be equal to the content size
 				godot_nine_patch_rect.set_size(godot_content_size)
 
 				# Set the NinePatchRect Patch Margin
-				# In LibGDX the patch margin is calculated from the edges, but in Godot the patch margin is relative to the content position and size. Here we convert the coordinates as required.
 				var libgdx_nine_patch_margin_rect : Rect2 = libgdx_atlas_texture_dictionary["split"]
 				var libgdx_left_patch_margin : int = int(libgdx_nine_patch_margin_rect.position.x)
 				var libgdx_right_patch_margin : int = int(libgdx_nine_patch_margin_rect.position.y)
 				var libgdx_top_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.x)
 				var libgdx_bottom_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.y)
-				var godot_right_patch_margin : int = int(godot_content_position_offset.x) + int(godot_content_size.x) - libgdx_left_patch_margin
-				var godot_left_patch_margin : int = int(libgdx_texture_size.x) - int(godot_content_position_offset.x) - libgdx_right_patch_margin
-				var godot_top_patch_margin : int = int(libgdx_texture_size.y) - int(godot_content_position_offset.y) - libgdx_bottom_patch_margin
-				var godot_bottom_patch_margin : int = int(godot_content_position_offset.y) + int(godot_content_size.y) - libgdx_top_patch_margin
-				godot_nine_patch_rect.set_patch_margin(MARGIN_LEFT, godot_left_patch_margin % int(libgdx_texture_size.x))
-				godot_nine_patch_rect.set_patch_margin(MARGIN_RIGHT, godot_right_patch_margin % int(libgdx_texture_size.x))
-				godot_nine_patch_rect.set_patch_margin(MARGIN_TOP, godot_top_patch_margin % int(libgdx_texture_size.y))
-				godot_nine_patch_rect.set_patch_margin(MARGIN_BOTTOM, godot_bottom_patch_margin % int(libgdx_texture_size.y))
+
+				# Verify that the libgdx margins are inside the content margin. We do this because Godot can't place the patch margins outside of the content margin:
+				if libgdx_left_content_margin_padding > libgdx_left_patch_margin:
+					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its left content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					libgdx_left_patch_margin = libgdx_left_content_margin_padding
+				if libgdx_right_content_margin_padding > libgdx_right_patch_margin:
+					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its right content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					libgdx_right_patch_margin = libgdx_right_content_margin_padding
+				if libgdx_top_content_margin_padding > libgdx_top_patch_margin:
+					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its top content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					libgdx_top_patch_margin = libgdx_top_content_margin_padding
+				if libgdx_bottom_content_margin_padding > libgdx_bottom_patch_margin:
+					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its bottom content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					libgdx_bottom_patch_margin = libgdx_bottom_content_margin_padding
+
+				# Debug
+				#print("LibGDX Left patch margin: ", libgdx_left_patch_margin)
+				#print("LibGDX Right patch margin: ", libgdx_right_patch_margin)
+				#print("LibGDX Bottom patch margin: ", libgdx_bottom_patch_margin)
+				#print("LibGDX Top patch margin: ", libgdx_top_patch_margin)
+
+				# In LibGDX the patch margin is calculated from the edges, but in Godot the patch margin is relative to the content padding. Here we convert the coordinates as required.
+				var godot_right_patch_margin : int = libgdx_right_patch_margin - libgdx_right_content_margin_padding
+				var godot_left_patch_margin : int = libgdx_left_patch_margin - libgdx_left_content_margin_padding
+				var godot_top_patch_margin : int = libgdx_top_patch_margin - libgdx_top_content_margin_padding
+				var godot_bottom_patch_margin : int = libgdx_bottom_patch_margin - libgdx_bottom_content_margin_padding
+
+				godot_nine_patch_rect.set_patch_margin(MARGIN_LEFT, godot_left_patch_margin)
+				godot_nine_patch_rect.set_patch_margin(MARGIN_RIGHT, godot_right_patch_margin)
+				godot_nine_patch_rect.set_patch_margin(MARGIN_TOP, godot_top_patch_margin)
+				godot_nine_patch_rect.set_patch_margin(MARGIN_BOTTOM, godot_bottom_patch_margin)
 
 				# Save the NinePatchRect node
 				# NOTE: The LibGDX TexturePacker format may include relative paths for which we may have to create directories for, thus we handle those here for the NinePatchRect nodes as well.
