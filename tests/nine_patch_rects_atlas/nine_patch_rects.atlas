@@ -1,0 +1,24 @@
+
+nine_patch_rects.png
+size: 256, 128
+format: RGBA8888
+filter: Nearest, Nearest
+repeat: none
+old-dark-castle-interior-cropped
+  rotate: false
+  xy: 2, 2
+  size: 160, 84
+  split: 10, 6, 7, 11
+  pad: 10, 6, 7, 11
+  orig: 160, 84
+  offset: 0, 0
+  index: -1
+old-dark-castle-interior-door-cropped
+  rotate: false
+  xy: 164, 22
+  size: 48, 64
+  split: 7, 6, 5, 2
+  pad: 7, 6, 5, 2
+  orig: 48, 64
+  offset: 0, 0
+  index: -1
