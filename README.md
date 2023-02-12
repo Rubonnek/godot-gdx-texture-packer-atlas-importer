@@ -15,13 +15,19 @@ Pack the individual sprites using the [GDX Texture Packer GUI](https://github.co
 
 This plugin will generate a `<atlas_filename>.atlas_textures` folder within which you'll find the each `AtlasTexture` associated with the spritesheet(s), as well as a `<atlas_filename>.nine_patch_rects` folder within which you'll find the each `NinePatchRect` node associated with the spritesheet(s).
 
-## Benefits
+<p align="center">
+<img src="screenshots/hellhound_atlas_textures_showcase.png" alt="Hellhound Atlas Textures">
+</p>
 
-The main benefits to use this tool are:
+*Art taken from [Gothicvania Patreon's Collection](https://itch.io/queue/c/313331/gothicvania?game_id=255239) by [Ansimuz](https://linktr.ee/ansimuz)*
 
-1. Packing texture will no longer require you to restart Godot.
+## Motivation
+
+There are several benefits for using [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) as an external texture packer:
+
+1. Packing textures will no longer require you to restart Godot -- all that is needed is for the GDX atlas to be reimported.
 2. [GDX Texture Packer GUI](https://github.com/crashinvaders/gdx-texture-packer-gui) itself provides an interface in which you can manage all your texture atlases separately which is great for bigger projects.
-3. And packing your textures will increase performance since by doing so Godot will be able to minimize the number of screen draw calls which could increase your frames per second depending on your workload.
+3. And packing your textures will increase performance since by doing so Godot will be able to minimize the number of screen draw calls which in turn could increase your frames per second depending on your workload.
 
 ## License
 
