@@ -25,4 +25,4 @@ The main benefits to use this tool are:
 
 ## License
 
-[MIT License](LICENSE). Copyright (c) 2021-2022 Wilson E. Alvarez.
+[MIT License](LICENSE). Copyright (c) 2021-2023 Wilson E. Alvarez.
