@@ -144,7 +144,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	#	__remove_directory_recursively(atlas_texture_resources_directory)
 	if not directory.dir_exists(atlas_texture_resources_directory):
 		if directory.make_dir(atlas_texture_resources_directory) != OK:
-			push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ atlas_texture_resources_directory ])
+			__push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ atlas_texture_resources_directory ])
 			return ERR_CANT_CREATE
 
 	# The LibGDX TexturePacker Atlas format also supports describing nine
@@ -162,7 +162,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	if is_a_nine_patch_rect_defined:
 		if not directory.dir_exists(nine_patch_rect_scenes_directory):
 			if directory.make_dir(nine_patch_rect_scenes_directory) != OK:
-				push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ nine_patch_rect_scenes_directory ])
+				__push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ nine_patch_rect_scenes_directory ])
 				return ERR_CANT_CREATE
 
 	# For each packed texture found within the GDX Atlas
@@ -177,7 +177,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 		if not is_instance_valid(libgdx_packed_texture_stream_texture):
 			var error_message : String = "Unable to load texture atlas at: %s\n" % [ packed_texture_path ]
 			error_message += "Image was referenced by LibGDX TexturePacker Atlas file at: %s\n" % [ libgdx_atlas_path ]
-			push_error(error_message)
+			__push_error(error_message)
 			return ERR_CANT_OPEN
 
 		# Make sure that the texture size matches what we've read from disk:
@@ -189,7 +189,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 			var error_message : String = "Incorrect texture size found in LibGDX TexturePacker Atlas!\n"
 			error_message += "Make sure that the texture in the LibGDX TexturePacker Atlas at: %s\n" % [ p_source_file ]
 			error_message += "match the loaded texture at: %s" % [ packed_texture_path ]
-			push_error(error_message)
+			__push_error(error_message)
 			return ERR_CANT_ACQUIRE_RESOURCE
 
 		# Convert GDX atlas texture entries within the packed texture dictionary into Godot's AtlasTexture resources:
@@ -249,7 +249,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 				var path_to_folder_to_create : String = atlas_texture_resources_directory.plus_file(atlas_texture_resource_name.get_base_dir())
 				if not directory.dir_exists(path_to_folder_to_create):
 					if directory.make_dir_recursive(path_to_folder_to_create) != OK:
-						push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
+						__push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
 						return ERR_CANT_CREATE
 			var atlas_texture_resource_save_path : String = atlas_texture_resource_path_format % [atlas_texture_resources_directory, atlas_texture_resource_name, get_save_extension()]
 
@@ -302,18 +302,19 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 				var libgdx_top_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.x)
 				var libgdx_bottom_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.y)
 
-				# Verify that the libgdx margins are inside the content margin. We do this because Godot can't place the patch margins outside of the content margin:
+				# Verify that the libgdx margins are inside the content margin. We do this because Godot can't place the nine patch margins outside of the content margin:
+				var warning_message = "Texture \"%s\" has nine patch margins defined outside its \"%s\" content area. This is not supported in Godot. Automatically fixing..."
 				if libgdx_left_content_margin_padding > libgdx_left_patch_margin:
-					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its left content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					__push_warning(warning_message % [ atlas_texture_resource_name, "left" ])
 					libgdx_left_patch_margin = libgdx_left_content_margin_padding
 				if libgdx_right_content_margin_padding > libgdx_right_patch_margin:
-					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its right content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					__push_warning(warning_message % [ atlas_texture_resource_name, "right" ])
 					libgdx_right_patch_margin = libgdx_right_content_margin_padding
 				if libgdx_top_content_margin_padding > libgdx_top_patch_margin:
-					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its top content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					__push_warning(warning_message % [ atlas_texture_resource_name, "top" ])
 					libgdx_top_patch_margin = libgdx_top_content_margin_padding
 				if libgdx_bottom_content_margin_padding > libgdx_bottom_patch_margin:
-					push_warning("GDX Texture Packer Atlas Importer: Defined Nine Patch Rect for texture \"%s\" has patch margins outside its bottom content area. This is not supported in Godot. Automatically fixing upon import..." % [ atlas_texture_resource_name ])
+					__push_warning(warning_message % [ atlas_texture_resource_name, "bottom" ])
 					libgdx_bottom_patch_margin = libgdx_bottom_content_margin_padding
 
 				# Debug
@@ -339,7 +340,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 					var path_to_folder_to_create : String = nine_patch_rect_scenes_directory.plus_file(atlas_texture_resource_name.get_base_dir())
 					if not directory.dir_exists(path_to_folder_to_create):
 						if directory.make_dir_recursive(path_to_folder_to_create) != OK:
-							push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
+							__push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
 							return ERR_CANT_CREATE
 				var godot_nine_patch_scene_save_path : String = atlas_texture_resource_path_format % [nine_patch_rect_scenes_directory, atlas_texture_resource_name, "tscn"]
 
@@ -354,7 +355,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 					if ResourceSaver.save(godot_nine_patch_scene_save_path, godot_nine_patch_packed_scene) != OK:
 						return ERR_PARSE_ERROR
 				else:
-					push_error("Unable to pack converted LibGDX nine patch rect as a NinePatchRect scene. Cannot continue.")
+					__push_error("Unable to pack converted LibGDX nine patch rect as a NinePatchRect scene. Cannot continue.")
 					return ERR_CANT_CREATE
 
 				# Let Godot know about the generated files during the import process so it can recreate them if they are deleted
@@ -370,6 +371,14 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	# will also re-import the atlas resource should the atlas file change.
 	return ResourceSaver.save("%s.%s" % [p_save_path, get_save_extension()], Resource.new())
 
+
+# Private methods
+var m_plugin_name = "LibGDX Texture Packer Atlas Importer"
+func __push_error(p_message : String) -> void:
+		push_error("%s: %s" % [ m_plugin_name, p_message ])
+
+func __push_warning(p_message : String) -> void:
+		push_warning("%s: %s" % [ m_plugin_name, p_message ])
 
 # Private methods -- only used for debugging purposes.
 #func __remove_directory_recursively(p_path : String) -> void:
