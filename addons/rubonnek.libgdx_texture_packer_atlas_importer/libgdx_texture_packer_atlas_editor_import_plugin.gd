@@ -49,7 +49,7 @@ func get_recognized_extensions() -> Array:
 # extensions for the same resource), you need to declare what will be used in
 # the import.
 func get_save_extension() -> String:
-	return "res"
+	return "tres"
 
 
 # The imported resource has a specific type, so the editor can know which
