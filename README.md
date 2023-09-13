@@ -1,10 +1,10 @@
-# Godot LibGDX Texture Packer Atlas Importer
+# Godot GDX Texture Packer Atlas Importer
 
-LibGDX Texture Packer atlas importer for the [Godot Game Engine](https://godotengine.org/).
+GDX Texture Packer atlas importer for the [Godot Game Engine](https://godotengine.org/).
 
 ## Installation
 
-[Download](https://github.com/Rubonnek/godot-libgdx-texture-packer-atlas-importer/archive/refs/heads/main.zip) or clone this repository and copy the contents of the
+[Download](https://github.com/Rubonnek/godot-gdx-texture-packer-importer/archive/refs/heads/main.zip) or clone this repository and copy the contents of the
 `addons` folder to your own project's `addons` folder.
 
 Then enable the plugin on the Project Settings.

@@ -28,12 +28,12 @@ extends EditorImportPlugin
 
 # Unique name for the import plugin to let Godot know which import was used
 func get_importer_name() -> String:
-	return "rubonnek.libgdx_texture_packer_atlas_importer"
+	return "rubonnek.gdx_texture_packer_atlas_importer"
 
 
 # Returns the name of the type it imports and it will be shown to the user in the Import dock.
 func get_visible_name() -> String:
-	return "LibGDX Atlas"
+	return "GDX Atlas"
 
 
 # Godot's import system detects file types by their extension. In the
@@ -104,7 +104,7 @@ func get_option_visibility(_p_option : String, _p_options : Dictionary) -> bool:
 	return true
 
 
-# Tweak the import order just so the LibGDX atlas does not get imported before
+# Tweak the import order just so the GDX atlas does not get imported before
 # the texture it depends on.
 func get_import_order() -> int:
 	# Import the atlas before the scenes
@@ -121,22 +121,22 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	# print("Options: " + str(p_options))
 
 	# Load the atlas reader:
-	var libgdx_texture_packer_atlas_reader_gdscript : GDScript = load(get_script().get_path().get_base_dir().plus_file("libgdx_texture_packer_atlas_reader.gd"))
-	var libgdx_atlas_reader = libgdx_texture_packer_atlas_reader_gdscript.new()
+	var gdx_texture_packer_atlas_reader_gdscript : GDScript = load(get_script().get_path().get_base_dir().plus_file("gdx_texture_packer_atlas_reader.gd"))
+	var gdx_atlas_reader = gdx_texture_packer_atlas_reader_gdscript.new()
 
-	# If there was an error parsing the LibGDX TexturePacker Atlas, inform the Editor
-	var libgdx_parse_result : Dictionary = libgdx_atlas_reader.parse(p_source_file)
-	var error : int = libgdx_parse_result["error"]
+	# If there was an error parsing the GDX TexturePacker Atlas, inform the Editor
+	var gdx_parse_result : Dictionary = gdx_atlas_reader.parse(p_source_file)
+	var error : int = gdx_parse_result["error"]
 	if error != OK:
 		# NOTE: No need to print the error since it was done already. Only need to bubble up the error code to the Editor.
 		return error
 
 	# There was no error. Grab the result:
-	var libgdx_atlas_data_dictionary : Dictionary = libgdx_parse_result["result"]
+	var gdx_atlas_data_dictionary : Dictionary = gdx_parse_result["result"]
 
 	# Grab the base directory:
-	var libgdx_atlas_path : String = libgdx_atlas_data_dictionary["path"] # same as p_source_file in the current scope
-	var atlas_texture_resources_directory : String = libgdx_atlas_path.trim_suffix("." + libgdx_atlas_path.get_extension()) + ".atlas_textures"
+	var gdx_atlas_path : String = gdx_atlas_data_dictionary["path"] # same as p_source_file in the current scope
+	var atlas_texture_resources_directory : String = gdx_atlas_path.trim_suffix("." + gdx_atlas_path.get_extension()) + ".atlas_textures"
 	# Make atlas_basename.atlas_textures folder to store all the AtlasTexture resources there. Clean up old directories if any.
 	var directory : Directory = Directory.new()
 	# Debug
@@ -144,93 +144,93 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 	#	__remove_directory_recursively(atlas_texture_resources_directory)
 	if not directory.dir_exists(atlas_texture_resources_directory):
 		if directory.make_dir(atlas_texture_resources_directory) != OK:
-			__push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ atlas_texture_resources_directory ])
+			__push_error("Can't create AtlasTextures root directory: %s\n\tUnable to continue importing GDX Atlas." % [ atlas_texture_resources_directory ])
 			return ERR_CANT_CREATE
 
-	# The LibGDX TexturePacker Atlas format also supports describing nine
+	# The GDX TexturePacker Atlas format also supports describing nine
 	# patch rectangles which directly translate to a NinePatchRect node in
 	# Godot. We'll create these scene in a separate folder for organization's sake.
-	var nine_patch_rect_scenes_directory : String = libgdx_atlas_path.trim_suffix("." + libgdx_atlas_path.get_extension()) + ".nine_patch_rects"
+	var nine_patch_rect_scenes_directory : String = gdx_atlas_path.trim_suffix("." + gdx_atlas_path.get_extension()) + ".nine_patch_rects"
 	# Debug
 	#if directory.dir_exists(nine_patch_rect_scenes_directory):
 	#	__remove_directory_recursively(nine_patch_rect_scenes_directory)
 	var is_a_nine_patch_rect_defined : bool = false
-	for packed_texture_dictionary in libgdx_atlas_data_dictionary["packed_textures"]:
-		for libgdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
-			if "split" in libgdx_atlas_texture_dictionary:
+	for packed_texture_dictionary in gdx_atlas_data_dictionary["packed_textures"]:
+		for gdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
+			if "split" in gdx_atlas_texture_dictionary:
 				is_a_nine_patch_rect_defined = true
 	if is_a_nine_patch_rect_defined:
 		if not directory.dir_exists(nine_patch_rect_scenes_directory):
 			if directory.make_dir(nine_patch_rect_scenes_directory) != OK:
-				__push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ nine_patch_rect_scenes_directory ])
+				__push_error("Can't create NinePatchRects root directory: %s\n\tUnable to continue importing GDX Atlas." % [ nine_patch_rect_scenes_directory ])
 				return ERR_CANT_CREATE
 
 	# For each packed texture found within the GDX Atlas
-	var libgdx_atlas_base_directory : String = libgdx_atlas_path.get_base_dir()
-	for packed_texture_dictionary in libgdx_atlas_data_dictionary["packed_textures"]:
+	var gdx_atlas_base_directory : String = gdx_atlas_path.get_base_dir()
+	for packed_texture_dictionary in gdx_atlas_data_dictionary["packed_textures"]:
 		# Grab the packed texture filename
 		var packed_texture_filename : String = packed_texture_dictionary["filename"]
 
 		# Generate the path of the packed texture relative to the GDX Atlas path
-		var packed_texture_path : String = libgdx_atlas_base_directory.plus_file(packed_texture_filename)
-		var libgdx_packed_texture_stream_texture : StreamTexture = load(packed_texture_path)
-		if not is_instance_valid(libgdx_packed_texture_stream_texture):
+		var packed_texture_path : String = gdx_atlas_base_directory.plus_file(packed_texture_filename)
+		var gdx_packed_texture_stream_texture : StreamTexture = load(packed_texture_path)
+		if not is_instance_valid(gdx_packed_texture_stream_texture):
 			var error_message : String = "Unable to load texture atlas at: %s\n" % [ packed_texture_path ]
-			error_message += "Image was referenced by LibGDX TexturePacker Atlas file at: %s\n" % [ libgdx_atlas_path ]
+			error_message += "Image was referenced by GDX TexturePacker Atlas file at: %s\n" % [ gdx_atlas_path ]
 			__push_error(error_message)
 			return ERR_CANT_OPEN
 
 		# Make sure that the texture size matches what we've read from disk:
 		# NOTE: The texture size is the only common metadata between
-		# LibGDX TexturePacker Atlas formats (i.e. between the legacy
-		# and new LibGDX TexturePacker Atlas formats).
-		var libgdx_packed_texture_size : Vector2 = libgdx_packed_texture_stream_texture.get_size()
-		if libgdx_packed_texture_size != packed_texture_dictionary["settings"]["size"]:
-			var error_message : String = "Incorrect texture size found in LibGDX TexturePacker Atlas!\n"
-			error_message += "Make sure that the texture in the LibGDX TexturePacker Atlas at: %s\n" % [ p_source_file ]
+		# GDX TexturePacker Atlas formats (i.e. between the legacy
+		# and new GDX TexturePacker Atlas formats).
+		var gdx_packed_texture_size : Vector2 = gdx_packed_texture_stream_texture.get_size()
+		if gdx_packed_texture_size != packed_texture_dictionary["settings"]["size"]:
+			var error_message : String = "Incorrect texture size found in GDX TexturePacker Atlas!\n"
+			error_message += "Make sure that the texture in the GDX TexturePacker Atlas at: %s\n" % [ p_source_file ]
 			error_message += "match the loaded texture at: %s" % [ packed_texture_path ]
 			__push_error(error_message)
 			return ERR_CANT_ACQUIRE_RESOURCE
 
 		# Convert GDX atlas texture entries within the packed texture dictionary into Godot's AtlasTexture resources:
-		for libgdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
+		for gdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
 			# Create the AtlasTexture resource:
 			var atlas_texture_resource : AtlasTexture = AtlasTexture.new()
 
 			# Set the atlas texture in the resource:
-			atlas_texture_resource.set_atlas(libgdx_packed_texture_stream_texture)
+			atlas_texture_resource.set_atlas(gdx_packed_texture_stream_texture)
 
 			# Set the atlas texture resource region:
-			var libgdx_texture_position : Vector2 = libgdx_atlas_texture_dictionary["xy"]
-			var libgdx_texture_size : Vector2 = libgdx_atlas_texture_dictionary["size"]
-			atlas_texture_resource.set_region(Rect2(libgdx_texture_position, libgdx_texture_size))
+			var gdx_texture_position : Vector2 = gdx_atlas_texture_dictionary["xy"]
+			var gdx_texture_size : Vector2 = gdx_atlas_texture_dictionary["size"]
+			atlas_texture_resource.set_region(Rect2(gdx_texture_position, gdx_texture_size))
 
 			# Set the margin:
-			# NOTE: The coordinate system over the y axis within the LibGDX atlas
+			# NOTE: The coordinate system over the y axis within the GDX atlas
 			# changes for the texture offset and the original size -- that's the
 			# reason for flipping the y axis when setting the margin below, just so
 			# it conforms to Godot's coordinate system:
-			var libgdx_texture_offset : Vector2 = libgdx_atlas_texture_dictionary["offset"]
-			var libgdx_texture_original_size : Vector2 = libgdx_atlas_texture_dictionary["orig"]
+			var gdx_texture_offset : Vector2 = gdx_atlas_texture_dictionary["offset"]
+			var gdx_texture_original_size : Vector2 = gdx_atlas_texture_dictionary["orig"]
 			# NOTE: the texture offset denotes left-to-right and bottom-to-top offset,
 			# basically denoting the bottom_left edge of the rectangle for the sprite.
 			# The bottom_right_edge is undefined, but can be calculated:
-			var bottom_right_edge : Vector2 = libgdx_texture_original_size - libgdx_texture_size
+			var bottom_right_edge : Vector2 = gdx_texture_original_size - gdx_texture_size
 
 			# Debug
 			#print("Bottom Right Edge margin: " + str(bottom_right_edge))
-			# NOTE: Since the LibGDX texture offset y coordinate is considered to
+			# NOTE: Since the GDX texture offset y coordinate is considered to
 			# be flipped in Godot's coordinate system (since the the y axis in
-			# LibGDX is measured from bottom_to_top when calculating the offset,
+			# GDX is measured from bottom_to_top when calculating the offset,
 			# whereas Godot measures it from top_to_bottom), every pixel added over
 			# the y axis on the bottom_right_edge corner in Godot must be
-			# substracted from the LibGDX texture offset y axis. Otherwise the
+			# substracted from the GDX texture offset y axis. Otherwise the
 			# sprite offset location will be off over the y axis.  In other words,
 			# the bottom_right_edge corner in Godot's coordinate system fills the
 			# image from the right and bottom. The bottom fill minus the y offset
-			# as determined by LibGDX, is what we need to calculate the image
+			# as determined by GDX, is what we need to calculate the image
 			# offset in Godot's coordinate system.
-			var texture_margin : Rect2 = Rect2(libgdx_texture_offset.x, bottom_right_edge.y - libgdx_texture_offset.y, bottom_right_edge.x, bottom_right_edge.y)
+			var texture_margin : Rect2 = Rect2(gdx_texture_offset.x, bottom_right_edge.y - gdx_texture_offset.y, bottom_right_edge.x, bottom_right_edge.y)
 
 			# Debug
 			#print("Texture margin: " + str(texture_margin))
@@ -239,17 +239,17 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 			# Generate new resource
 			var atlas_texture_resource_path_format = "%s/%s.%s"
 			var atlas_texture_resource_name : String
-			if libgdx_atlas_texture_dictionary["index"] != "-1":
-				atlas_texture_resource_name = "%s_%s" % [ libgdx_atlas_texture_dictionary["basename"], libgdx_atlas_texture_dictionary["index"] ]
+			if gdx_atlas_texture_dictionary["index"] != "-1":
+				atlas_texture_resource_name = "%s_%s" % [ gdx_atlas_texture_dictionary["basename"], gdx_atlas_texture_dictionary["index"] ]
 			else:
-				atlas_texture_resource_name = libgdx_atlas_texture_dictionary["basename"]
+				atlas_texture_resource_name = gdx_atlas_texture_dictionary["basename"]
 
-			# The LibGDX TexturePacker format may include relative paths for which we may have to create directories for, thus we handle those here.
+			# The GDX TexturePacker format may include relative paths for which we may have to create directories for, thus we handle those here.
 			if "/" in atlas_texture_resource_name:
 				var path_to_folder_to_create : String = atlas_texture_resources_directory.plus_file(atlas_texture_resource_name.get_base_dir())
 				if not directory.dir_exists(path_to_folder_to_create):
 					if directory.make_dir_recursive(path_to_folder_to_create) != OK:
-						__push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
+						__push_error("Can't create directory: %s\n\tUnable to continue importing GDX Atlas." % [ path_to_folder_to_create ])
 						return ERR_CANT_CREATE
 			var atlas_texture_resource_save_path : String = atlas_texture_resource_path_format % [atlas_texture_resources_directory, atlas_texture_resource_name, get_save_extension()]
 
@@ -263,7 +263,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 			r_gen_files.push_back(atlas_texture_resource_save_path)
 
 			# We are done processing the AtlasTexture, but there's a chance the user defined a nine patch rectangle for it which we can translate into a Godot NinePatchRect node.
-			if "split" in libgdx_atlas_texture_dictionary:
+			if "split" in gdx_atlas_texture_dictionary:
 				# A nine patch rectangle has been defined. Let's create the node.
 				var godot_nine_patch_rect : NinePatchRect = NinePatchRect.new()
 
@@ -275,59 +275,59 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 
 
 				# Set the new AtlasTexture Content Margin
-				var libgdx_nine_patch_content_margin_rect2 : Rect2 = libgdx_atlas_texture_dictionary["pad"]
-				var libgdx_left_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.x)
-				var libgdx_right_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.position.y)
-				var libgdx_bottom_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.y)
-				var libgdx_top_content_margin_padding : int = int(libgdx_nine_patch_content_margin_rect2.size.x)
+				var gdx_nine_patch_content_margin_rect2 : Rect2 = gdx_atlas_texture_dictionary["pad"]
+				var gdx_left_content_margin_padding : int = int(gdx_nine_patch_content_margin_rect2.position.x)
+				var gdx_right_content_margin_padding : int = int(gdx_nine_patch_content_margin_rect2.position.y)
+				var gdx_bottom_content_margin_padding : int = int(gdx_nine_patch_content_margin_rect2.size.y)
+				var gdx_top_content_margin_padding : int = int(gdx_nine_patch_content_margin_rect2.size.x)
 
 				# Debug
 				#print("Name: ", atlas_texture_resource_name)
-				#print("LibGDX Left content margin padding: ", libgdx_left_content_margin_padding)
-				#print("LibGDX Right content margin padding: ", libgdx_right_content_margin_padding)
-				#print("LibGDX Bottom content margin padding: ", libgdx_bottom_content_margin_padding)
-				#print("LibGDX Top content margin padding: ", libgdx_top_content_margin_padding)
+				#print("GDX Left content margin padding: ", gdx_left_content_margin_padding)
+				#print("GDX Right content margin padding: ", gdx_right_content_margin_padding)
+				#print("GDX Bottom content margin padding: ", gdx_bottom_content_margin_padding)
+				#print("GDX Top content margin padding: ", gdx_top_content_margin_padding)
 
-				var godot_content_position_offset : Vector2 = Vector2(libgdx_left_content_margin_padding, libgdx_top_content_margin_padding)
-				var godot_content_size : Vector2 = Vector2(libgdx_texture_size.x - (libgdx_left_content_margin_padding + libgdx_right_content_margin_padding), libgdx_texture_size.y - (libgdx_top_content_margin_padding + libgdx_bottom_content_margin_padding))
+				var godot_content_position_offset : Vector2 = Vector2(gdx_left_content_margin_padding, gdx_top_content_margin_padding)
+				var godot_content_size : Vector2 = Vector2(gdx_texture_size.x - (gdx_left_content_margin_padding + gdx_right_content_margin_padding), gdx_texture_size.y - (gdx_top_content_margin_padding + gdx_bottom_content_margin_padding))
 				godot_nine_patch_rect.set_region_rect(Rect2(godot_content_position_offset, godot_content_size))
 
 				# Set the size of the NinePatchRect node to be equal to the content size
 				godot_nine_patch_rect.set_size(godot_content_size)
 
 				# Set the NinePatchRect Patch Margin
-				var libgdx_nine_patch_margin_rect : Rect2 = libgdx_atlas_texture_dictionary["split"]
-				var libgdx_left_patch_margin : int = int(libgdx_nine_patch_margin_rect.position.x)
-				var libgdx_right_patch_margin : int = int(libgdx_nine_patch_margin_rect.position.y)
-				var libgdx_top_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.x)
-				var libgdx_bottom_patch_margin : int = int(libgdx_nine_patch_margin_rect.size.y)
+				var gdx_nine_patch_margin_rect : Rect2 = gdx_atlas_texture_dictionary["split"]
+				var gdx_left_patch_margin : int = int(gdx_nine_patch_margin_rect.position.x)
+				var gdx_right_patch_margin : int = int(gdx_nine_patch_margin_rect.position.y)
+				var gdx_top_patch_margin : int = int(gdx_nine_patch_margin_rect.size.x)
+				var gdx_bottom_patch_margin : int = int(gdx_nine_patch_margin_rect.size.y)
 
-				# Verify that the libgdx margins are inside the content margin. We do this because Godot can't place the nine patch margins outside of the content margin:
+				# Verify that the gdx margins are inside the content margin. We do this because Godot can't place the nine patch margins outside of the content margin:
 				var warning_message = "Texture \"%s\" has nine patch margins defined outside its \"%s\" content area. This is not supported in Godot. Automatically fixing..."
-				if libgdx_left_content_margin_padding > libgdx_left_patch_margin:
+				if gdx_left_content_margin_padding > gdx_left_patch_margin:
 					__push_warning(warning_message % [ atlas_texture_resource_name, "left" ])
-					libgdx_left_patch_margin = libgdx_left_content_margin_padding
-				if libgdx_right_content_margin_padding > libgdx_right_patch_margin:
+					gdx_left_patch_margin = gdx_left_content_margin_padding
+				if gdx_right_content_margin_padding > gdx_right_patch_margin:
 					__push_warning(warning_message % [ atlas_texture_resource_name, "right" ])
-					libgdx_right_patch_margin = libgdx_right_content_margin_padding
-				if libgdx_top_content_margin_padding > libgdx_top_patch_margin:
+					gdx_right_patch_margin = gdx_right_content_margin_padding
+				if gdx_top_content_margin_padding > gdx_top_patch_margin:
 					__push_warning(warning_message % [ atlas_texture_resource_name, "top" ])
-					libgdx_top_patch_margin = libgdx_top_content_margin_padding
-				if libgdx_bottom_content_margin_padding > libgdx_bottom_patch_margin:
+					gdx_top_patch_margin = gdx_top_content_margin_padding
+				if gdx_bottom_content_margin_padding > gdx_bottom_patch_margin:
 					__push_warning(warning_message % [ atlas_texture_resource_name, "bottom" ])
-					libgdx_bottom_patch_margin = libgdx_bottom_content_margin_padding
+					gdx_bottom_patch_margin = gdx_bottom_content_margin_padding
 
 				# Debug
-				#print("LibGDX Left patch margin: ", libgdx_left_patch_margin)
-				#print("LibGDX Right patch margin: ", libgdx_right_patch_margin)
-				#print("LibGDX Bottom patch margin: ", libgdx_bottom_patch_margin)
-				#print("LibGDX Top patch margin: ", libgdx_top_patch_margin)
+				#print("GDX Left patch margin: ", gdx_left_patch_margin)
+				#print("GDX Right patch margin: ", gdx_right_patch_margin)
+				#print("GDX Bottom patch margin: ", gdx_bottom_patch_margin)
+				#print("GDX Top patch margin: ", gdx_top_patch_margin)
 
-				# In LibGDX the patch margin is calculated from the edges, but in Godot the patch margin is relative to the content padding. Here we convert the coordinates as required.
-				var godot_right_patch_margin : int = libgdx_right_patch_margin - libgdx_right_content_margin_padding
-				var godot_left_patch_margin : int = libgdx_left_patch_margin - libgdx_left_content_margin_padding
-				var godot_top_patch_margin : int = libgdx_top_patch_margin - libgdx_top_content_margin_padding
-				var godot_bottom_patch_margin : int = libgdx_bottom_patch_margin - libgdx_bottom_content_margin_padding
+				# In GDX the patch margin is calculated from the edges, but in Godot the patch margin is relative to the content padding. Here we convert the coordinates as required.
+				var godot_right_patch_margin : int = gdx_right_patch_margin - gdx_right_content_margin_padding
+				var godot_left_patch_margin : int = gdx_left_patch_margin - gdx_left_content_margin_padding
+				var godot_top_patch_margin : int = gdx_top_patch_margin - gdx_top_content_margin_padding
+				var godot_bottom_patch_margin : int = gdx_bottom_patch_margin - gdx_bottom_content_margin_padding
 
 				godot_nine_patch_rect.set_patch_margin(MARGIN_LEFT, godot_left_patch_margin)
 				godot_nine_patch_rect.set_patch_margin(MARGIN_RIGHT, godot_right_patch_margin)
@@ -335,12 +335,12 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 				godot_nine_patch_rect.set_patch_margin(MARGIN_BOTTOM, godot_bottom_patch_margin)
 
 				# Save the NinePatchRect node
-				# NOTE: The LibGDX TexturePacker format may include relative paths for which we may have to create directories for, thus we handle those here for the NinePatchRect nodes as well.
+				# NOTE: The GDX TexturePacker format may include relative paths for which we may have to create directories for, thus we handle those here for the NinePatchRect nodes as well.
 				if "/" in atlas_texture_resource_name:
 					var path_to_folder_to_create : String = nine_patch_rect_scenes_directory.plus_file(atlas_texture_resource_name.get_base_dir())
 					if not directory.dir_exists(path_to_folder_to_create):
 						if directory.make_dir_recursive(path_to_folder_to_create) != OK:
-							__push_error("Can't create directory: %s\n\tUnable to continue importing LibGDX Atlas." % [ path_to_folder_to_create ])
+							__push_error("Can't create directory: %s\n\tUnable to continue importing GDX Atlas." % [ path_to_folder_to_create ])
 							return ERR_CANT_CREATE
 				var godot_nine_patch_scene_save_path : String = atlas_texture_resource_path_format % [nine_patch_rect_scenes_directory, atlas_texture_resource_name, "tscn"]
 
@@ -355,7 +355,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 					if ResourceSaver.save(godot_nine_patch_scene_save_path, godot_nine_patch_packed_scene) != OK:
 						return ERR_PARSE_ERROR
 				else:
-					__push_error("Unable to pack converted LibGDX nine patch rect as a NinePatchRect scene. Cannot continue.")
+					__push_error("Unable to pack converted GDX nine patch rect as a NinePatchRect scene. Cannot continue.")
 					return ERR_CANT_CREATE
 
 				# Let Godot know about the generated files during the import process so it can recreate them if they are deleted
@@ -365,7 +365,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 				godot_nine_patch_rect.free()
 
 	# Do the final for the original import (p_source_file):
-	# NOTE: Here we save the LibGDX Atlas file as a raw Resource because
+	# NOTE: Here we save the GDX Atlas file as a raw Resource because
 	# the atlas itself does not provide any value other than generating all
 	# the other AtlasTexture resources, and also by doing this the engine
 	# will also re-import the atlas resource should the atlas file change.
@@ -373,7 +373,7 @@ func import(p_source_file : String, p_save_path : String, _p_options : Dictionar
 
 
 # Private methods
-var m_plugin_name = "LibGDX Texture Packer Atlas Importer"
+var m_plugin_name = "GDX Texture Packer Atlas Importer"
 func __push_error(p_message : String) -> void:
 		push_error("%s: %s" % [ m_plugin_name, p_message ])
 
