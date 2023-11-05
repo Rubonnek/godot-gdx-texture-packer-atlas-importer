@@ -31,4 +31,4 @@ There are several benefits for using [GDX Texture Packer GUI](https://github.com
 
 ## License
 
-[MIT License](LICENSE). Copyright (c) 2021-2023 Wilson E. Alvarez.
+[MIT License](LICENSE). Copyright (c) 2021-present Wilson E. Alvarez.
