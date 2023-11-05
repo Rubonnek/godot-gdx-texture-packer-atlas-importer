@@ -16,7 +16,7 @@ config/icon="res://icon.png"
 
 [editor_plugins]
 
-enabled=PoolStringArray( "res://addons/rubonnek.gdx_texture_packer_importer/plugin.cfg" )
+enabled=PoolStringArray( "res://addons/rubonnek.gdx_texture_packer_atlas_importer/plugin.cfg" )
 
 [gui]
 

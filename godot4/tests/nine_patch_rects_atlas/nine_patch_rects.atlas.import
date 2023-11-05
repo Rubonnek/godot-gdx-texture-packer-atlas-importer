@@ -1,0 +1,16 @@
+[remap]
+
+importer="rubonnek.gdx_texture_packer_atlas_importer"
+type="AtlasTexture"
+uid="uid://dcrwcpgoboi6b"
+path="res://.godot/imported/nine_patch_rects.atlas-730f68f020dac95c729a2bbe66efa38f.tres"
+
+[deps]
+
+files=["res://tests/nine_patch_rects_atlas/nine_patch_rects.atlas_textures/old-dark-castle-interior-cropped.tres", "res://tests/nine_patch_rects_atlas/nine_patch_rects.nine_patch_rects/old-dark-castle-interior-cropped.tscn", "res://tests/nine_patch_rects_atlas/nine_patch_rects.atlas_textures/old-dark-castle-interior-door-cropped.tres", "res://tests/nine_patch_rects_atlas/nine_patch_rects.nine_patch_rects/old-dark-castle-interior-door-cropped.tscn"]
+
+source_file="res://tests/nine_patch_rects_atlas/nine_patch_rects.atlas"
+dest_files=["res://.godot/imported/nine_patch_rects.atlas-730f68f020dac95c729a2bbe66efa38f.tres", "res://tests/nine_patch_rects_atlas/nine_patch_rects.atlas_textures/old-dark-castle-interior-cropped.tres", "res://tests/nine_patch_rects_atlas/nine_patch_rects.nine_patch_rects/old-dark-castle-interior-cropped.tscn", "res://tests/nine_patch_rects_atlas/nine_patch_rects.atlas_textures/old-dark-castle-interior-door-cropped.tres", "res://tests/nine_patch_rects_atlas/nine_patch_rects.nine_patch_rects/old-dark-castle-interior-door-cropped.tscn"]
+
+[params]
+
