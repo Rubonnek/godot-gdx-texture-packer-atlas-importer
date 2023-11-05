@@ -1,0 +1,244 @@
+
+hellhound.png
+size: 2048, 64
+format: RGBA8888
+filter: Nearest, Nearest
+repeat: none
+hellhound_idle
+  rotate: false
+  xy: 749, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 3
+hellhound_idle
+  rotate: false
+  xy: 749, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 7
+hellhound_idle
+  rotate: false
+  xy: 881, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 8
+hellhound_idle
+  rotate: false
+  xy: 881, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 2
+hellhound_idle
+  rotate: false
+  xy: 881, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 6
+hellhound_idle
+  rotate: false
+  xy: 881, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 4
+hellhound_idle
+  rotate: false
+  xy: 1013, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 0
+hellhound_idle
+  rotate: false
+  xy: 1145, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 5
+hellhound_idle
+  rotate: false
+  xy: 1145, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 9
+hellhound_idle
+  rotate: false
+  xy: 1277, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 10
+hellhound_idle
+  rotate: false
+  xy: 1277, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 1
+hellhound_jump
+  rotate: false
+  xy: 2, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 4
+hellhound_jump
+  rotate: false
+  xy: 69, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 1
+hellhound_jump
+  rotate: false
+  xy: 136, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 3
+hellhound_jump
+  rotate: false
+  xy: 203, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 0
+hellhound_jump
+  rotate: false
+  xy: 270, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 5
+hellhound_jump
+  rotate: false
+  xy: 337, 2
+  size: 65, 48
+  orig: 65, 48
+  offset: 0, 0
+  index: 2
+hellhound_run
+  rotate: false
+  xy: 404, 18
+  size: 67, 32
+  orig: 67, 32
+  offset: 0, 0
+  index: 4
+hellhound_run
+  rotate: false
+  xy: 473, 18
+  size: 67, 32
+  orig: 67, 32
+  offset: 0, 0
+  index: 1
+hellhound_run
+  rotate: false
+  xy: 542, 18
+  size: 67, 32
+  orig: 67, 32
+  offset: 0, 0
+  index: 3
+hellhound_run
+  rotate: false
+  xy: 611, 18
+  size: 67, 32
+  orig: 67, 32
+  offset: 0, 0
+  index: 0
+hellhound_run
+  rotate: false
+  xy: 680, 18
+  size: 67, 32
+  orig: 67, 32
+  offset: 0, 0
+  index: 2
+hellhound_walk
+  rotate: false
+  xy: 815, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 4
+hellhound_walk
+  rotate: false
+  xy: 947, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 9
+hellhound_walk
+  rotate: false
+  xy: 1079, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 1
+hellhound_walk
+  rotate: false
+  xy: 1211, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 6
+hellhound_walk
+  rotate: false
+  xy: 1343, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 11
+hellhound_walk
+  rotate: false
+  xy: 1409, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 3
+hellhound_walk
+  rotate: false
+  xy: 1475, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 8
+hellhound_walk
+  rotate: false
+  xy: 1541, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 0
+hellhound_walk
+  rotate: false
+  xy: 1607, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 5
+hellhound_walk
+  rotate: false
+  xy: 1673, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 10
+hellhound_walk
+  rotate: false
+  xy: 1739, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 2
+hellhound_walk
+  rotate: false
+  xy: 1805, 18
+  size: 64, 32
+  orig: 64, 32
+  offset: 0, 0
+  index: 7
