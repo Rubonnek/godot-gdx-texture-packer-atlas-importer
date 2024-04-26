@@ -36,6 +36,11 @@ func get_visible_name() -> String:
 	return "GDX Atlas"
 
 
+# Returns the processing priority of the plugin. Higher priority import plugins will be preferred over the recognized extension.
+func get_priority() -> float:
+	return 1.0
+
+
 # Godot's import system detects file types by their extension. In the
 # get_recognized_extensions() method you return an array of strings to
 # represent each extension that this plugin can understand.
