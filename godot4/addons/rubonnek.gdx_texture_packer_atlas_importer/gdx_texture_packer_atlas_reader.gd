@@ -53,7 +53,7 @@ func __read_texture_metadata(p_libgdx_atlas_pool_string_array : PackedStringArra
 func __read_legacy_texture_metadata(p_libgdx_atlas_pool_string_array : PackedStringArray, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
 	var header_size_in_number_of_lines : int = 4
 	var number_of_lines_read : int = 0
-	for header_line_index in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
+	for header_line_index : int in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
 		# Do a sanity check on the line index we are about to read
 		if header_line_index > p_libgdx_atlas_pool_string_array.size() - 1:
 			# Sample Legacy Texture Metadata:
@@ -90,7 +90,7 @@ func __read_legacy_texture_metadata(p_libgdx_atlas_pool_string_array : PackedStr
 func __read_new_texture_metadata(p_libgdx_atlas_pool_string_array : PackedStringArray, p_starting_at_line : int, r_packed_texture_dictionary : Dictionary) -> int:
 	var header_size_in_number_of_lines : int = 2
 	var number_of_lines_read : int = 0
-	for header_line_index in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
+	for header_line_index : int in range(p_starting_at_line, p_starting_at_line + header_size_in_number_of_lines):
 		# Do a sanity check on the line index we are about to read
 		if header_line_index > p_libgdx_atlas_pool_string_array.size() - 1:
 			# Sample New Texture Metadata:
@@ -138,7 +138,7 @@ func __get_next_atlas_texture_entry(p_libgdx_atlas_pool_string_array : PackedStr
 
 # In order to process the legacy GDX TexturePacker Atlas format, we need to know what keys we expect to read under each atlas texture.
 # This constant is only meant to be used by the function: __get_next_libgdx_atlas_texture_entry_in_new_atlas_format
-const m_expected_legacy_libgdx_texture_packer_atlas_format_keys : Array = [
+const m_expected_legacy_libgdx_texture_packer_atlas_format_keys : PackedStringArray = [
 		"rotate",
 		"xy",
 		"size",
@@ -191,13 +191,13 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 	#	  orig: 32, 32
 	#	  offset: 3, 1
 	#	  index: 3
-	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
+	for libgdx_texture_packer_atlas_texture_entry_line : int in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
 		# Check if we have reached the end of file -- if so we are done reading the atlas
 		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
 			break
 
 		# Grab atlas key-value pair
-		var libgdx_atlas_texture_entry_key_value_pair_array : Array = p_libgdx_atlas_pool_string_array[libgdx_texture_packer_atlas_texture_entry_line].split(":")
+		var libgdx_atlas_texture_entry_key_value_pair_array : PackedStringArray = p_libgdx_atlas_pool_string_array[libgdx_texture_packer_atlas_texture_entry_line].split(":")
 
 		# Check that the key we got is supported
 		var libgdx_atlas_texture_entry_key : String = libgdx_atlas_texture_entry_key_value_pair_array[0]
@@ -225,7 +225,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 				# x: from left to right
 				# y: from top to bottom
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
-				var libgdx_atlas_texture_position_on_atlas_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_position_on_atlas_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_atlas_texture_position_x_string : String = libgdx_atlas_texture_position_on_atlas_array[0]
 				var libgdx_atlas_texture_position_y_string : String = libgdx_atlas_texture_position_on_atlas_array[1]
 				libgdx_atlas_texture_position_vector = Vector2i(int(libgdx_atlas_texture_position_x_string), int(libgdx_atlas_texture_position_y_string))
@@ -238,7 +238,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 				# this differs from the sprite offset in which the y coordinate is measured from bottom to top
 				# Also, this sprite size may differ from the original since
 				# transparent borders may be trimmed to save space.
-				var libgdx_atlas_texture_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_size_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_atlas_texture_size_x_string : String = libgdx_atlas_texture_size_array[0]
 				var libgdx_atlas_texture_size_y_string : String = libgdx_atlas_texture_size_array[1]
 				libgdx_atlas_texture_size_vector = Vector2i(int(libgdx_atlas_texture_size_x_string), int(libgdx_atlas_texture_size_y_string))
@@ -253,7 +253,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 				# 	4 represents the nine patch rect margin from the top
 				# 	3 represents the nine patch rect margin from the bottom
 				was_split_key_seen = true
-				var libgdx_nine_patch_rect_patch_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_nine_patch_rect_patch_margin_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_patch_margin_left : int = int(libgdx_nine_patch_rect_patch_margin_array[0])
 				var libgdx_patch_margin_right : int = int(libgdx_nine_patch_rect_patch_margin_array[1])
 				var libgdx_patch_margin_top : int = int(libgdx_nine_patch_rect_patch_margin_array[2])
@@ -270,7 +270,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 				# 	4 represents the content margin from the top
 				# 	3 represents the content margin from the bottom
 				was_pad_key_seen = true
-				var libgdx_nine_patch_content_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_nine_patch_content_margin_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_rect_region_left : int = int(libgdx_nine_patch_content_margin_array[0])
 				var libgdx_rect_region_right : int = int(libgdx_nine_patch_content_margin_array[1])
 				var libgdx_rect_region_top : int = int(libgdx_nine_patch_content_margin_array[2])
@@ -279,7 +279,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 
 			"orig":
 				# GDX AtlasTexture Original Size
-				var libgdx_atlas_texture_original_size_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_original_size_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_atlas_texture_original_size_x_string : String = libgdx_atlas_texture_original_size_array[0]
 				var libgdx_atlas_texture_original_size_y_string : String = libgdx_atlas_texture_original_size_array[1]
 				libgdx_atlas_texture_original_size_vector = Vector2i(int(libgdx_atlas_texture_original_size_x_string), int(libgdx_atlas_texture_original_size_y_string))
@@ -290,7 +290,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 				# x: from left to right
 				# y: from bottom to top
 				# this differs from the sprite position in atlas in which the y coordinate is measured from top to bottom
-				var libgdx_atlas_texture_offset_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_atlas_texture_offset_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_atlas_texture_offset_x_string : String = libgdx_atlas_texture_offset_array[0]
 				var libgdx_atlas_texture_offset_y_string : String = libgdx_atlas_texture_offset_array[1]
 				libgdx_atlas_texture_offset_vector = Vector2i(int(libgdx_atlas_texture_offset_x_string), int(libgdx_atlas_texture_offset_y_string))
@@ -340,7 +340,8 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 			return current_line_to_read - p_starting_at_line
 
 	# Push the atlas_texture_entry_dictionary into r_packed_texture_dictionary
-	r_packed_texture_dictionary["atlas_textures"].push_back(atlas_texture_entry_dictionary)
+	var atlas_textures_array : Array = r_packed_texture_dictionary["atlas_textures"]
+	atlas_textures_array.push_back(atlas_texture_entry_dictionary)
 
 	# Debug
 	#print(atlas_texture_entry_dictionary)
@@ -349,7 +350,7 @@ func __get_next_libgdx_atlas_texture_entry_in_legacy_atlas_format(p_libgdx_atlas
 
 # In order to process the new GDX TexturePacker Atlas format, we need to know what keys we expect to read under each atlas texture.
 # This constant is only meant to be used by the function: __get_next_libgdx_atlas_texture_entry_in_new_atlas_format
-const m_expected_new_libgdx_texture_packer_atlas_format_keys : Array = [
+const m_expected_new_libgdx_texture_packer_atlas_format_keys : PackedStringArray = [
 		"index",
 		"bounds",
 		"split",
@@ -422,7 +423,7 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 	# the same as what appears in the 'bounds' key.
 	var was_offsets_key_seen : bool = false
 
-	for libgdx_texture_packer_atlas_texture_entry_line in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
+	for libgdx_texture_packer_atlas_texture_entry_line : int in range(current_line_to_read, current_line_to_read + libgdx_atlas_texture_entry_format_lines_to_read):
 		# If we reach eof, we've reached the end of the file and that's completely fine.
 		if libgdx_texture_packer_atlas_texture_entry_line > p_libgdx_atlas_pool_string_array.size() - 1:
 			if not was_bounds_key_seen:
@@ -497,7 +498,7 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 				# 	4 represents the nine patch rect margin from the top
 				# 	3 represents the nine patch rect margin from the bottom
 				was_split_key_seen = true
-				var libgdx_nine_patch_rect_patch_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_nine_patch_rect_patch_margin_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_patch_margin_left : int = int(libgdx_nine_patch_rect_patch_margin_array[0])
 				var libgdx_patch_margin_right : int = int(libgdx_nine_patch_rect_patch_margin_array[1])
 				var libgdx_patch_margin_top : int = int(libgdx_nine_patch_rect_patch_margin_array[2])
@@ -514,7 +515,7 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 				# 	4 represents the content margin from the top
 				# 	3 represents the content margin from the bottom
 				was_pad_key_seen = true
-				var libgdx_nine_patch_content_margin_array : Array = libgdx_atlas_texture_entry_value.split(",")
+				var libgdx_nine_patch_content_margin_array : PackedStringArray = libgdx_atlas_texture_entry_value.split(",")
 				var libgdx_rect_region_left : int = int(libgdx_nine_patch_content_margin_array[0])
 				var libgdx_rect_region_right : int = int(libgdx_nine_patch_content_margin_array[1])
 				var libgdx_rect_region_top : int = int(libgdx_nine_patch_content_margin_array[2])
@@ -594,7 +595,8 @@ func __get_next_libgdx_atlas_texture_entry_in_new_atlas_format(p_libgdx_atlas_po
 	#print("GDX TexturePacker AtlasTexture Dictionary: ", atlas_texture_entry_dictionary)
 
 	# Push the atlas_texture_entry_dictionary into r_packed_texture_dictionary
-	r_packed_texture_dictionary["atlas_textures"].push_back(atlas_texture_entry_dictionary)
+	var atlas_textures_array : Array = r_packed_texture_dictionary["atlas_textures"]
+	atlas_textures_array.push_back(atlas_texture_entry_dictionary)
 
 	# Debug
 	#print(atlas_texture_entry_dictionary)
@@ -620,14 +622,14 @@ func parse(p_source_file : String) -> Dictionary:
 
 	# Slurp the GDX Texture Packer Atlas file into memory.
 	var libgdx_atlas_pool_string_array : PackedStringArray = file_handle.get_as_text().split("\n")
-	libgdx_atlas_pool_string_array.resize(libgdx_atlas_pool_string_array.size() - 1) # the last entry is an empty string
+	var _size : int = libgdx_atlas_pool_string_array.resize(libgdx_atlas_pool_string_array.size() - 1) # the last entry is an empty string
 
 	# Close the GDX Texture Packer Atlas file handle -- it's not needed anymore
 	file_handle.close()
 
 	# Remove the whitespace out of all the lines. Even if the
 	# new format gets pretty-printed we'll be able to process it:
-	for index in range(0, libgdx_atlas_pool_string_array.size()):
+	for index : int in range(0, libgdx_atlas_pool_string_array.size()):
 		libgdx_atlas_pool_string_array[index] = m_whitespace_regex.sub(libgdx_atlas_pool_string_array[index], "", true)
 
 	# Debug
@@ -803,7 +805,8 @@ func parse(p_source_file : String) -> Dictionary:
 				# We are done. This was a successful read
 
 				# Save the current packed texture dictionary -- we are done reading it
-				parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"].push_back(current_libgdx_packed_texture_dictionary)
+				var packed_textures_array : Array = parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"]
+				packed_textures_array.push_back(current_libgdx_packed_texture_dictionary)
 
 				# And exit out of the loop
 				break
@@ -812,7 +815,8 @@ func parse(p_source_file : String) -> Dictionary:
 			# Toggle the reader state back to READING_TEXTURE_HEADER to process the data accordingly
 			if libgdx_atlas_pool_string_array[line_index] == "":
 				# Save the current packed texture dictionary -- we are done reading it
-				parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"].push_back(current_libgdx_packed_texture_dictionary)
+				var packed_textures_array : Array = parsed_libgdx_texture_packer_atlas_dictionary["packed_textures"]
+				packed_textures_array.push_back(current_libgdx_packed_texture_dictionary)
 
 				# Create a new dictionary and attach it to the current_libgdx_packed_texture_dictionary since we are about to read a new GDX Texture Packer Atlas page
 				current_libgdx_packed_texture_dictionary = {

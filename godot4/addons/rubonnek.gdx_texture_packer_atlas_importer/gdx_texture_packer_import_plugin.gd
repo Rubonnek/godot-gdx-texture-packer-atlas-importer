@@ -88,7 +88,7 @@ func _get_preset_name(p_preset : int) -> String:
 # This is the method which defines the available options -- get_import_options()
 # returns an array of dictionaries, and each dictionary contains a few keys
 # that are checked to customize the option as its shown to the user.
-func _get_import_options(_p_string : String, p_int : int) -> Array[Dictionary]:
+func _get_import_options(_p_string : String, _p_int : int) -> Array[Dictionary]:
 	#match p_preset:
 	#	m_presets.DEFAULT:
 	#		return [{
@@ -129,10 +129,13 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 	# print("R_Gen_Files: " + str(r_gen_files))
 
 	# Load the atlas reader:
+	@warning_ignore("unsafe_cast", "unsafe_call_argument", "unsafe_method_access")
 	var gdx_texture_packer_atlas_reader_gdscript : GDScript = load(get_script().get_path().get_base_dir().path_join("gdx_texture_packer_atlas_reader.gd"))
+	@warning_ignore("untyped_declaration")
 	var gdx_atlas_reader = gdx_texture_packer_atlas_reader_gdscript.new()
 
 	# If there was an error parsing the GDX TexturePacker Atlas, inform the Editor
+	@warning_ignore("unsafe_method_access")
 	var gdx_parse_result : Dictionary = gdx_atlas_reader.parse(p_source_file)
 	var error : Error = gdx_parse_result["error"]
 	if error != OK:
@@ -163,8 +166,8 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 	#if directory.dir_exists(nine_patch_rect_scenes_directory):
 	#	__remove_directory_recursively(nine_patch_rect_scenes_directory)
 	var is_a_nine_patch_rect_defined : bool = false
-	for packed_texture_dictionary in gdx_atlas_data_dictionary["packed_textures"]:
-		for gdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
+	for packed_texture_dictionary : Dictionary in gdx_atlas_data_dictionary["packed_textures"]:
+		for gdx_atlas_texture_dictionary : Dictionary in packed_texture_dictionary["atlas_textures"]:
 			if "split" in gdx_atlas_texture_dictionary:
 				is_a_nine_patch_rect_defined = true
 	if is_a_nine_patch_rect_defined:
@@ -175,7 +178,7 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 
 	# For each packed texture found within the GDX Atlas
 	var gdx_atlas_base_directory : String = gdx_atlas_path.get_base_dir()
-	for packed_texture_dictionary in gdx_atlas_data_dictionary["packed_textures"]:
+	for packed_texture_dictionary : Dictionary in gdx_atlas_data_dictionary["packed_textures"]:
 		# Grab the packed texture filename
 		var packed_texture_filename : String = packed_texture_dictionary["filename"]
 
@@ -201,7 +204,7 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 			return ERR_CANT_ACQUIRE_RESOURCE
 
 		# Convert GDX atlas texture entries within the packed texture dictionary into Godot's AtlasTexture resources:
-		for gdx_atlas_texture_dictionary in packed_texture_dictionary["atlas_textures"]:
+		for gdx_atlas_texture_dictionary : Dictionary in packed_texture_dictionary["atlas_textures"]:
 			# Create the AtlasTexture resource:
 			var atlas_texture_resource : AtlasTexture = AtlasTexture.new()
 
@@ -245,7 +248,7 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 			atlas_texture_resource.set_margin(texture_margin)
 
 			# Generate new resource
-			var atlas_texture_resource_path_format = "%s/%s.%s"
+			var atlas_texture_resource_path_format : String = "%s/%s.%s"
 			var atlas_texture_resource_name : String
 			if gdx_atlas_texture_dictionary["index"] != "-1":
 				atlas_texture_resource_name = "%s_%s" % [ gdx_atlas_texture_dictionary["basename"], gdx_atlas_texture_dictionary["index"] ]
@@ -281,6 +284,9 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 				# Set the AtlasTexture on the NinePatchRect
 				godot_nine_patch_rect.set_texture(atlas_texture_resource)
 
+				# Set the size of the NinePatchRect node to be equal to the texture size
+				var texture_size : Vector2i = gdx_atlas_texture_dictionary["size"]
+				godot_nine_patch_rect.set_size(texture_size)
 
 				# Set the new AtlasTexture Content Margin
 				var gdx_nine_patch_content_margin_rect2 : Rect2 = gdx_atlas_texture_dictionary["pad"]
@@ -296,46 +302,17 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 				#print("GDX Bottom content margin padding: ", gdx_bottom_content_margin_padding)
 				#print("GDX Top content margin padding: ", gdx_top_content_margin_padding)
 
-				var godot_content_position_offset : Vector2i = Vector2i(gdx_left_content_margin_padding, gdx_top_content_margin_padding)
-				var godot_content_size : Vector2i = Vector2i(gdx_texture_size.x - (gdx_left_content_margin_padding + gdx_right_content_margin_padding), gdx_texture_size.y - (gdx_top_content_margin_padding + gdx_bottom_content_margin_padding))
-				godot_nine_patch_rect.set_region_rect(Rect2(godot_content_position_offset, godot_content_size))
-
-				# Set the size of the NinePatchRect node to be equal to the content size
-				godot_nine_patch_rect.set_size(godot_content_size)
-
-				# Set the NinePatchRect Patch Margin
-				var gdx_nine_patch_margin_rect : Rect2 = gdx_atlas_texture_dictionary["split"]
-				var gdx_left_patch_margin : int = int(gdx_nine_patch_margin_rect.position.x)
-				var gdx_right_patch_margin : int = int(gdx_nine_patch_margin_rect.position.y)
-				var gdx_top_patch_margin : int = int(gdx_nine_patch_margin_rect.size.x)
-				var gdx_bottom_patch_margin : int = int(gdx_nine_patch_margin_rect.size.y)
-
-				# Verify that the gdx margins are inside the content margin. We do this because Godot can't place the nine patch margins outside of the content margin:
-				var warning_message = "Texture2D \"%s\" has nine patch margins defined outside its \"%s\" content area. This is not supported in Godot. Automatically fixing..."
-				if gdx_left_content_margin_padding > gdx_left_patch_margin:
-					__push_warning(warning_message % [ atlas_texture_resource_name, "left" ])
-					gdx_left_patch_margin = gdx_left_content_margin_padding
-				if gdx_right_content_margin_padding > gdx_right_patch_margin:
-					__push_warning(warning_message % [ atlas_texture_resource_name, "right" ])
-					gdx_right_patch_margin = gdx_right_content_margin_padding
-				if gdx_top_content_margin_padding > gdx_top_patch_margin:
-					__push_warning(warning_message % [ atlas_texture_resource_name, "top" ])
-					gdx_top_patch_margin = gdx_top_content_margin_padding
-				if gdx_bottom_content_margin_padding > gdx_bottom_patch_margin:
-					__push_warning(warning_message % [ atlas_texture_resource_name, "bottom" ])
-					gdx_bottom_patch_margin = gdx_bottom_content_margin_padding
+				# The padding in GDX corresponds to the patch margin in Godot
+				var godot_right_patch_margin : int = gdx_right_content_margin_padding
+				var godot_left_patch_margin : int = gdx_left_content_margin_padding
+				var godot_top_patch_margin : int = gdx_top_content_margin_padding
+				var godot_bottom_patch_margin : int = gdx_bottom_content_margin_padding
 
 				# Debug
-				#print("GDX Left patch margin: ", gdx_left_patch_margin)
-				#print("GDX Right patch margin: ", gdx_right_patch_margin)
-				#print("GDX Bottom patch margin: ", gdx_bottom_patch_margin)
-				#print("GDX Top patch margin: ", gdx_top_patch_margin)
-
-				# In GDX the patch margin is calculated from the edges, but in Godot the patch margin is relative to the content padding. Here we convert the coordinates as required.
-				var godot_right_patch_margin : int = gdx_right_patch_margin - gdx_right_content_margin_padding
-				var godot_left_patch_margin : int = gdx_left_patch_margin - gdx_left_content_margin_padding
-				var godot_top_patch_margin : int = gdx_top_patch_margin - gdx_top_content_margin_padding
-				var godot_bottom_patch_margin : int = gdx_bottom_patch_margin - gdx_bottom_content_margin_padding
+				#print("Godot Left patch margin: ", godot_left_patch_margin)
+				#print("Godot Right patch margin: ", godot_right_patch_margin)
+				#print("Godot Bottom patch margin: ", godot_bottom_patch_margin)
+				#print("Godot Top patch margin: ", godot_top_patch_margin)
 
 				godot_nine_patch_rect.set_patch_margin(SIDE_LEFT, godot_left_patch_margin)
 				godot_nine_patch_rect.set_patch_margin(SIDE_RIGHT, godot_right_patch_margin)
@@ -381,12 +358,12 @@ func _import(p_source_file: String, p_save_path: String, _p_options: Dictionary,
 
 
 # Private methods
-var m_plugin_name = "GDX Texture2D Packer Atlas Importer"
+var _m_plugin_name : String = "GDX Texture2D Packer Atlas Importer"
 func __push_error(p_message : String) -> void:
-		push_error("%s: %s" % [ m_plugin_name, p_message ])
+		push_error("%s: %s" % [ _m_plugin_name, p_message ])
 
 func __push_warning(p_message : String) -> void:
-		push_warning("%s: %s" % [ m_plugin_name, p_message ])
+		push_warning("%s: %s" % [ _m_plugin_name, p_message ])
 
 # Private methods -- only used for debugging purposes.
 #func __remove_directory_recursively(p_path : String) -> void:

@@ -29,6 +29,7 @@ func _enter_tree() -> void:
 	# Using ResourceLoader.load here instead of preload just so Godot Plugin
 	# Refresher is able to properly reload the import plugin without stumbling
 	# into ResourceLoader's cached entry.
+	@warning_ignore("unsafe_cast")
 	var editor_import_plugin_gdscript : GDScript = ResourceLoader.load((get_script() as Resource).get_path().get_base_dir().path_join("gdx_texture_packer_import_plugin.gd"))
 	m_gdx_texture_packer_atlas_importer = editor_import_plugin_gdscript.new()
 	add_import_plugin(m_gdx_texture_packer_atlas_importer)
